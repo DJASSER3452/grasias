@@ -807,7 +807,6 @@ box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
 <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
 </button>
 </div>
-</div>
 
 <!-- نافذة الدردشة المحسنة -->
 <div id="chatContainer" class="chat-container">
@@ -848,7 +847,6 @@ box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
 <button onclick="closeRatingModal()" style="flex: 1; background: linear-gradient(135deg, #718096, #4a5568);">
 <i class="fas fa-times"></i> تخطي
 </button>
-</div>
 </div>
 </div>
 </div>
@@ -1528,7 +1526,7 @@ showNotification('شكراً لتقييمك!', 'تم إرسال التقييم �
 
 function showNotification(title, message, type) {
 const notification = document.createElement('div');
-notification.className = 'notification';
+notification.className = `notification ${type}`;
 
 let icon = '';
 let bgColor = '';
@@ -1569,7 +1567,7 @@ status: status,
 lastStatusUpdate: Date.now()
 });
 
-showNotification('تم تحديث الحالة', `الحالة الآن: ${status === 'available' ? 'متاح' : status === 'busy' ? 'مشغول' : 'غير متصل'}`, 'success');
+showNotification('تم تحديث الحالة', `الحالة الآن: ${status === 'available' ? 'متاح' : 'غير متاح'}`, 'info');
 }
 
 function activateRide() {
@@ -1590,8 +1588,83 @@ function callDriver(phone) {
 if (phone && phone !== 'غير متوفر') {
 window.open(`tel:${phone}`, '_self');
 } else {
-showNotification('رقم غير متوفر', 'رقم الهاتف غير متوفر للسائق', 'error');
+showNotification('خطأ', 'رقم الهاتف غير متوفر', 'error');
 }
+}
+
+function cancelRide() {
+if (window.activeRide) {
+// إلغاء الرحلة النشطة
+window.activeRide.status = 'cancelled';
+updateRideInFirebase(window.activeRide);
+        
+// إعادة تعيين المتغيرات
+window.activeRide = null;
+        
+// إخفاء واجهات الرحلة النشطة
+document.getElementById('activeRideSection').style.display = 'none';
+document.getElementById('rideRequestSection').style.display = 'block';
+        
+showNotification('تم الإلغاء', 'تم إلغاء الرحلة بنجاح', 'info');
+}
+}
+
+function pickupPassenger() {
+if (window.activeRide && window.currentRole === 'sayeq') {
+window.activeRide.status = 'in_progress';
+updateRideInFirebase(window.activeRide);
+        
+document.getElementById('pickupBtn').style.display = 'none';
+document.getElementById('completeBtn').style.display = 'block';
+        
+showNotification('تم التركيب', 'تم تركيب الراكب بنجاح', 'success');
+}
+}
+
+function completeRide() {
+if (window.activeRide) {
+window.activeRide.status = 'completed';
+updateRideInFirebase(window.activeRide);
+        
+// إظهار نموذج التقييم للراكب
+if (window.currentRole === 'rakib') {
+showRatingModal();
+}
+        
+// إعادة تعيين المتغيرات
+window.activeRide = null;
+        
+// إخفاء واجهات الرحلة النشطة
+document.getElementById('activeRideSection').style.display = 'none';
+document.getElementById('rideRequestSection').style.display = 'block';
+        
+showNotification('اكتملت الرحلة', 'تم إنهاء الرحلة بنجاح', 'success');
+}
+}
+
+function setRating(stars) {
+// إزالة التحديد من جميع النجوم
+document.querySelectorAll('.star').forEach(star => {
+star.classList.remove('selected');
+});
+    
+// تحديد النجوم حتى النجمة المختارة
+for (let i = 1; i <= stars; i++) {
+document.querySelector(`.star[data-rating="${i}"]`).classList.add('selected');
+}
+    
+// حفظ التقييم
+window.selectedRating = stars;
+}
+
+function saveRatingToFirebase(ratingData) {
+// محاكاة حفظ التقييم في Firebase
+console.log('Rating saved:', ratingData);
+}
+
+function updateRideInFirebase(ride) {
+// محاكاة تحديث الرحلة في Firebase
+console.log('Ride updated:', ride);
 }
 
 function logout() {
@@ -1613,6 +1686,26 @@ showMessage('تم تسجيل الخروج بنجاح', 'success');
 }
 }
 
+window.addEventListener('load', function() {
+// تهيئة المتغيرات العامة
+window.currentRole = 'rakib'; // افتراضي
+window.currentUser = { uid: 'user1', displayName: 'مستخدم تجريبي' };
+    
+// تهيئة الخريطة إذا كانت متوفرة
+if (typeof L !== 'undefined') {
+initializeMap();
+}
+    
+console.log('تم تحميل التطبيق بنجاح');
+});
+
+function initializeMap() {
+// تهيئة الخريطة
+if (document.getElementById('map')) {
+window.currentMap = L.map('map').setView([33.3152, 44.3661], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.currentMap);
+}
+}
 </script>
 
 </body>
