@@ -806,6 +806,11 @@ box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
 <button onclick="logout()" style="background: linear-gradient(135deg, #e53e3e, #c53030); margin-top: 10px;">
 <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
 </button>
+
+<!-- Chat toggle button -->
+<button onclick="toggleChat()" style="background: linear-gradient(135deg, #38a169, #2f855a); margin-top: 10px;">
+<i class="fas fa-comments"></i> فتح الدردشة
+</button>
 </div>
 
 <!-- نافذة الدردشة المحسنة -->
@@ -833,11 +838,11 @@ box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
 <i class="fas fa-star" style="color: #ffd700;"></i> قيم السائق
 </h3>
 <div class="star-rating" id="starRating">
-<span class="star" data-rating="1">★</span>
-<span class="star" data-rating="2">★</span>
-<span class="star" data-rating="3">★</span>
-<span class="star" data-rating="4">★</span>
-<span class="star" data-rating="5">★</span>
+<span class="star" onclick="setRating(1)" data-rating="1">★</span>
+<span class="star" onclick="setRating(2)" data-rating="2">★</span>
+<span class="star" onclick="setRating(3)" data-rating="3">★</span>
+<span class="star" onclick="setRating(4)" data-rating="4">★</span>
+<span class="star" onclick="setRating(5)" data-rating="5">★</span>
 </div>
 <textarea class="rating-comment" id="ratingComment" placeholder="اكتب تعليقك على السائق (اختياري)..."></textarea>
 <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -850,31 +855,12 @@ box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
 </div>
 </div>
 </div>
+</div>
+</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-<!-- تحميل مكتبات Firebase -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, set, get, child, onValue, push, remove, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-const firebaseConfig = {
-apiKey: "AIzaSyAekz29R9IwY1pygd4Mic5AX8XZ7A7Z4Fs",
-authDomain: "grasias-d7830.firebaseapp.com",
-databaseURL: "https://grasias-d7830-default-rtdb.asia-southeast1.firebasedatabase.app",
-projectId: "grasias-d7830",
-storageBucket: "grasias-d7830.appspot.com",
-messagingSenderId: "134413476604",
-appId: "1:134413476604:web:ab1acfa69c025218cbad79",
-measurementId: "G-6QBYM41CJ1"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-
+<script>
 window.currentUser = null;
 window.currentRole = null;
 window.currentTrip = null;
@@ -883,383 +869,589 @@ window.selectedDriver = null;
 window.currentLocation = null;
 window.currentMap = null;
 window.selectedRating = 0;
-window.db = db;
-window.auth = auth;
-window.ref = ref;
-window.set = set;
-window.get = get;
-window.update = update;
-window.push = push;
-window.onValue = onValue;
+window.drivers = [];
+window.messages = [];
 
-window.signInWithGoogle = () => {
-const roleInput = document.querySelector('input[name="role"]:checked');
-if (!roleInput) {
-showMessage('يرجى اختيار نوع المستخدم أولاً', 'error');
-return;
+function signInWithGoogle() {
+    const roleInput = document.querySelector('input[name="role"]:checked');
+    if (!roleInput) {
+        showMessage('يرجى اختيار نوع المستخدم أولاً', 'error');
+        return;
+    }
+
+    const selectedRole = roleInput.value;
+    const loginBtn = document.querySelector('button');
+    loginBtn.innerHTML = '<span class="loading"></span> جاري تسجيل الدخول...';
+    loginBtn.disabled = true;
+
+    // محاكاة تسجيل الدخول
+    setTimeout(() => {
+        window.currentUser = {
+            uid: 'user_' + Date.now(),
+            displayName: selectedRole === 'rakib' ? 'راكب تجريبي' : 'سائق تجريبي',
+            email: 'test@example.com'
+        };
+        window.currentRole = selectedRole;
+        
+        showMessage('تم تسجيل الدخول بنجاح!', 'success');
+        setTimeout(() => {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('mapPage').style.display = 'block';
+            loadMap(window.currentUser.displayName);
+            setupUserInterface();
+        }, 1500);
+    }, 2000);
 }
 
-const selectedRole = roleInput.value;
-const loginBtn = document.querySelector('button');
-loginBtn.innerHTML = '<span class="loading"></span> جاري تسجيل الدخول...';
-loginBtn.disabled = true;
-
-signInWithPopup(auth, provider)
-.then((result) => {
-window.currentUser = result.user;
-window.currentRole = selectedRole;
-
-const userData = {
-uid: result.user.uid,
-name: result.user.displayName,
-email: result.user.email,
-role: selectedRole,
-lastLogin: Date.now(),
-status: selectedRole === 'sayeq' ? 'offline' : 'active'
-};
-
-return set(ref(db, `users/${result.user.uid}`), userData);
-})
-.then(() => {
-showMessage('تم تسجيل الدخول بنجاح!', 'success');
-setTimeout(() => {
-document.getElementById('loginPage').style.display = 'none';
-document.getElementById('mapPage').style.display = 'block';
-loadMap(window.currentUser.displayName);
-watchTripRequests();
-}, 1500);
-})
-.catch((error) => {
-console.error('خطأ في تسجيل الدخول:', error);
-showMessage('حدث خطأ في تسجيل الدخول', 'error');
-loginBtn.innerHTML = '<i class="fab fa-google"></i> تسجيل الدخول بجوجل';
-loginBtn.disabled = false;
-});
-};
-
-window.activateRide = function() {
-if (window.currentRole === 'rakib') {
-loadNearbyDrivers();
-showNotification('جاري البحث', 'البحث عن السائقين القريبين...', 'info');
-} else {
-const status = document.getElementById('driverStatus').value;
-if (status === 'offline') {
-document.getElementById('driverStatus').value = 'available';
-updateDriverStatus();
-}
-showNotification('تم تفعيل الخدمة', 'أنت الآن متاح لاستقبال طلبات الرحلات', 'success');
-}
-};
-
-window.calculatePrice = function(distance) {
-const basePrice = 2000; // السعر الأساسي
-const pricePerKm = 500; // السعر لكل كيلومتر
-return basePrice + (distance * pricePerKm);
-};
-
-window.calculateDistance = function(lat1, lon1, lat2, lon2) {
-const R = 6371; // نصف قطر الأرض بالكيلومتر
-const dLat = (lat2 - lat1) * Math.PI / 180;
-const dLon = (lon2 - lon1) * Math.PI / 180;
-const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-Math.sin(dLon/2) * Math.sin(dLon/2);
-const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-return R * c;
-};
-
-window.requestRide = function(driverId) {
-if (!window.currentLocation) {
-showNotification('خطأ', 'لم يتم تحديد موقعك', 'error');
-return;
+function activateRide() {
+    if (window.currentRole === 'rakib') {
+        loadNearbyDrivers();
+        showNotification('جاري البحث', 'البحث عن السائقين القريبين...', 'info');
+    } else {
+        const status = document.getElementById('driverStatus').value;
+        if (status === 'offline') {
+            document.getElementById('driverStatus').value = 'available';
+            updateDriverStatus();
+        }
+        showNotification('تم تفعيل الخدمة', 'أنت الآن متاح لاستقبال طلبات الرحلات', 'success');
+        // محاكاة طلب رحلة للسائق
+        setTimeout(() => {
+            showTripRequest();
+        }, 5000);
+    }
 }
 
-const tripData = {
-passengerId: window.currentUser.uid,
-passengerName: window.currentUser.displayName,
-driverId: driverId,
-status: 'requested',
-timestamp: Date.now(),
-passengerLocation: window.currentLocation,
-price: calculatePrice(5) // مسافة افتراضية
-};
-
-push(ref(window.db, 'trips'), tripData)
-.then(() => {
-showNotification('تم الإرسال', 'تم إرسال طلب الرحلة للسائق', 'success');
-})
-.catch((error) => {
-showNotification('خطأ', 'فشل في إرسال الطلب', 'error');
-});
-};
-
-window.acceptTrip = function(tripId) {
-update(ref(window.db, `trips/${tripId}`), {
-status: 'accepted',
-acceptedAt: Date.now()
-})
-.then(() => {
-window.currentTrip = tripId;
-showNotification('تم القبول', 'تم قبول الرحلة', 'success');
-document.getElementById('tripControls').style.display = 'block';
-})
-.catch((error) => {
-showNotification('خطأ', 'فشل في قبول الرحلة', 'error');
-});
-};
-
-window.cancelTrip = function() {
-if (!window.currentTrip) return;
-
-update(ref(window.db, `trips/${window.currentTrip}`), {
-status: 'cancelled',
-cancelledAt: Date.now(),
-cancelledBy: window.currentRole
-})
-.then(() => {
-showNotification('تم الإلغاء', 'تم إلغاء الرحلة', 'info');
-window.currentTrip = null;
-document.getElementById('tripControls').style.display = 'none';
-})
-.catch((error) => {
-showNotification('خطأ', 'فشل في إلغاء الرحلة', 'error');
-});
-};
-
-window.pickupPassenger = function() {
-if (!window.currentTrip) return;
-
-update(ref(window.db, `trips/${window.currentTrip}`), {
-status: 'picked_up',
-pickedUpAt: Date.now()
-})
-.then(() => {
-showNotification('تم التركيب', 'تم تركيب الراكب', 'success');
-document.getElementById('pickupBtn').style.display = 'none';
-document.getElementById('completeBtn').style.display = 'block';
-})
-.catch((error) => {
-showNotification('خطأ', 'فشل في تحديث حالة الرحلة', 'error');
-});
-};
-
-window.completeTrip = function() {
-if (!window.currentTrip) return;
-
-update(ref(window.db, `trips/${window.currentTrip}`), {
-status: 'completed',
-completedAt: Date.now()
-})
-.then(() => {
-showNotification('اكتملت الرحلة', 'تم إنهاء الرحلة بنجاح', 'success');
-if (window.currentRole === 'rakib') {
-document.getElementById('ratingModal').style.display = 'flex';
-}
-window.currentTrip = null;
-document.getElementById('tripControls').style.display = 'none';
-})
-.catch((error) => {
-showNotification('خطأ', 'فشل في إنهاء الرحلة', 'error');
-});
-};
-
-window.setRating = function(rating) {
-window.selectedRating = rating;
-const stars = document.querySelectorAll('.star');
-stars.forEach((star, index) => {
-star.classList.toggle('active', index < rating);
-});
-};
-
-window.submitRating = function() {
-const comment = document.getElementById('ratingComment').value;
-if (window.selectedRating === 0) {
-showNotification('خطأ', 'يرجى اختيار تقييم', 'error');
-return;
+function calculatePrice(distance = null) {
+    const distanceInput = document.getElementById('distanceInput');
+    const priceDisplay = document.getElementById('priceDisplay');
+    const calculatedPrice = document.getElementById('calculatedPrice');
+    
+    const dist = distance || parseFloat(distanceInput.value) || 0;
+    if (dist > 0) {
+        const basePrice = 2000; // السعر الأساسي
+        const pricePerKm = 500; // السعر لكل كيلومتر
+        const totalPrice = basePrice + (dist * pricePerKm);
+        
+        calculatedPrice.textContent = totalPrice.toLocaleString();
+        priceDisplay.style.display = 'block';
+        
+        return totalPrice;
+    }
+    return 0;
 }
 
-const ratingData = {
-driverId: window.selectedDriver,
-passengerId: window.currentUser.uid,
-rating: window.selectedRating,
-comment: comment,
-timestamp: Date.now()
-};
-
-push(ref(window.db, 'ratings'), ratingData)
-.then(() => {
-showNotification('شكراً لك', 'تم إرسال التقييم', 'success');
-document.getElementById('ratingModal').style.display = 'none';
-window.selectedRating = 0;
-document.getElementById('ratingComment').value = '';
-})
-.catch((error) => {
-showNotification('خطأ', 'فشل في إرسال التقييم', 'error');
-});
-};
-
-window.sendMessage = function() {
-const messageInput = document.getElementById('messageInput');
-const message = messageInput.value.trim();
-if (!message || !window.currentChatPartner) return;
-
-const messageData = {
-senderId: window.currentUser.uid,
-senderName: window.currentUser.displayName,
-receiverId: window.currentChatPartner,
-message: message,
-timestamp: Date.now()
-};
-
-push(ref(window.db, 'messages'), messageData)
-.then(() => {
-messageInput.value = '';
-displayMessage(messageData, true);
-})
-.catch((error) => {
-showNotification('خطأ', 'فشل في إرسال الرسالة', 'error');
-});
-};
-
-window.openChat = function(partnerId, partnerName) {
-window.currentChatPartner = partnerId;
-document.getElementById('chatPartnerName').textContent = partnerName;
-document.getElementById('chatModal').style.display = 'flex';
-loadChatMessages();
-};
-
-window.closeChat = function() {
-document.getElementById('chatModal').style.display = 'none';
-window.currentChatPartner = null;
-};
-
-window.closeRatingModal = function() {
-document.getElementById('ratingModal').style.display = 'none';
-window.selectedRating = 0;
-document.getElementById('ratingComment').value = '';
-};
-
-// دوال مساعدة
-function showNotification(title, message, type) {
-const notification = document.createElement('div');
-notification.className = `notification ${type}`;
-notification.innerHTML = `
-<div class="notification-content">
-<h4>${title}</h4>
-<p>${message}</p>
-</div>
-`;
-
-document.body.appendChild(notification);
-setTimeout(() => notification.classList.add('show'), 100);
-setTimeout(() => {
-notification.classList.remove('show');
-setTimeout(() => notification.remove(), 300);
-}, 3000);
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // نصف قطر الأرض بالكيلومتر
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 
-function showMessage(message, type) {
-showNotification(type === 'error' ? 'خطأ' : 'نجح', message, type);
+function requestRide(driverId) {
+    if (!window.currentLocation) {
+        showNotification('خطأ', 'لم يتم تحديد موقعك', 'error');
+        return;
+    }
+
+    const driver = window.drivers.find(d => d.id === driverId);
+    if (!driver) return;
+
+    const distance = calculateDistance(
+        window.currentLocation.lat, window.currentLocation.lng,
+        driver.lat, driver.lng
+    );
+
+    window.currentTrip = {
+        id: 'trip_' + Date.now(),
+        passengerId: window.currentUser.uid,
+        passengerName: window.currentUser.displayName,
+        driverId: driverId,
+        driverName: driver.name,
+        status: 'requested',
+        timestamp: Date.now(),
+        passengerLocation: window.currentLocation,
+        driverLocation: { lat: driver.lat, lng: driver.lng },
+        distance: distance,
+        price: calculatePrice(distance)
+    };
+
+    window.selectedDriver = driverId;
+    showNotification('تم الإرسال', 'تم إرسال طلب الرحلة للسائق', 'success');
+    
+    // محاكاة قبول السائق
+    setTimeout(() => {
+        acceptTrip();
+    }, 3000);
 }
 
-function loadMap(userName) {
-if (navigator.geolocation) {
-navigator.geolocation.getCurrentPosition((position) => {
-window.currentLocation = {
-lat: position.coords.latitude,
-lng: position.coords.longitude
-};
-
-if (window.currentMap) {
-window.currentMap.setView([window.currentLocation.lat, window.currentLocation.lng], 15);
-L.marker([window.currentLocation.lat, window.currentLocation.lng])
-.addTo(window.currentMap)
-.bindPopup(`موقع ${userName}`)
-.openPopup();
-}
-});
-}
-}
-
-function loadNearbyDrivers() {
-// محاكاة تحميل السائقين القريبين
-const driversContainer = document.getElementById('nearbyDrivers');
-driversContainer.innerHTML = `
-<div class="driver-card">
-<div class="driver-info">
-<h3>أحمد محمد</h3>
-<div class="rating">⭐ 4.8</div>
-<p>تويوتا كامري - أبيض</p>
-<p>المسافة: 2.5 كم</p>
-<p class="price">السعر المتوقع: ${calculatePrice(2.5)} دينار</p>
-</div>
-<button onclick="requestRide('driver1')" class="request-btn">طلب رحلة</button>
-</div>
-`;
+function acceptTrip() {
+    if (!window.currentTrip) return;
+    
+    window.currentTrip.status = 'accepted';
+    window.currentTrip.acceptedAt = Date.now();
+    
+    showNotification('تم القبول', 'تم قبول الرحلة من السائق', 'success');
+    updateTripStatus();
+    document.getElementById('tripControls').style.display = 'block';
+    
+    if (window.currentRole === 'sayeq') {
+        document.getElementById('pickupBtn').style.display = 'block';
+    }
+    
+    // عرض المسافة التلقائية
+    showAutoDistance();
 }
 
-function updateDriverStatus() {
-// تحديث حالة السائق
-showNotification('تم التحديث', 'تم تحديث حالتك', 'success');
+function cancelTrip() {
+    if (!window.currentTrip) return;
+
+    window.currentTrip.status = 'cancelled';
+    window.currentTrip.cancelledAt = Date.now();
+    window.currentTrip.cancelledBy = window.currentRole;
+
+    showNotification('تم الإلغاء', 'تم إلغاء الرحلة', 'info');
+    window.currentTrip = null;
+    document.getElementById('tripControls').style.display = 'none';
+    document.getElementById('tripStatus').style.display = 'none';
+    document.getElementById('autoDistance').style.display = 'none';
 }
 
-function watchTripRequests() {
-// مراقبة طلبات الرحلات
-if (window.currentRole === 'sayeq') {
-// محاكاة طلب رحلة للسائق
-setTimeout(() => {
-showNotification('طلب رحلة جديد', 'لديك طلب رحلة جديد', 'info');
-}, 5000);
+function confirmPickup() {
+    if (!window.currentTrip) return;
+
+    window.currentTrip.status = 'picked_up';
+    window.currentTrip.pickedUpAt = Date.now();
+
+    showNotification('تم التركيب', 'تم تركيب الراكب', 'success');
+    document.getElementById('pickupBtn').style.display = 'none';
+    document.getElementById('completeBtn').style.display = 'block';
+    updateTripStatus();
 }
+
+function completeTrip() {
+    if (!window.currentTrip) return;
+
+    window.currentTrip.status = 'completed';
+    window.currentTrip.completedAt = Date.now();
+
+    showNotification('اكتملت الرحلة', 'تم إنهاء الرحلة بنجاح', 'success');
+    
+    if (window.currentRole === 'rakib') {
+        document.getElementById('ratingModal').style.display = 'flex';
+    }
+    
+    window.currentTrip = null;
+    document.getElementById('tripControls').style.display = 'none';
+    document.getElementById('tripStatus').style.display = 'none';
+    document.getElementById('autoDistance').style.display = 'none';
+}
+
+function setRating(rating) {
+    window.selectedRating = rating;
+    const stars = document.querySelectorAll('.star');
+    stars.forEach((star, index) => {
+        star.classList.toggle('active', index < rating);
+    });
+}
+
+function submitRating() {
+    const comment = document.getElementById('ratingComment').value;
+    if (window.selectedRating === 0) {
+        showNotification('خطأ', 'يرجى اختيار تقييم', 'error');
+        return;
+    }
+
+    const ratingData = {
+        driverId: window.selectedDriver,
+        passengerId: window.currentUser.uid,
+        rating: window.selectedRating,
+        comment: comment,
+        timestamp: Date.now()
+    };
+
+    showNotification('شكراً لك', 'تم إرسال التقييم', 'success');
+    closeRatingModal();
+}
+
+function closeRatingModal() {
+    document.getElementById('ratingModal').style.display = 'none';
+    window.selectedRating = 0;
+    document.getElementById('ratingComment').value = '';
+    const stars = document.querySelectorAll('.star');
+    stars.forEach(star => star.classList.remove('active'));
+}
+
+function toggleChat() {
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer.style.display === 'none' || !chatContainer.style.display) {
+        chatContainer.style.display = 'flex';
+        loadChatMessages();
+    } else {
+        chatContainer.style.display = 'none';
+    }
+}
+
+function closeChat() {
+    document.getElementById('chatContainer').style.display = 'none';
+}
+
+function sendMessage() {
+    const messageInput = document.getElementById('chatInput');
+    const message = messageInput.value.trim();
+    if (!message) return;
+
+    const messageData = {
+        id: 'msg_' + Date.now(),
+        senderId: window.currentUser.uid,
+        senderName: window.currentUser.displayName,
+        message: message,
+        timestamp: Date.now()
+    };
+
+    window.messages.push(messageData);
+    messageInput.value = '';
+    displayMessage(messageData, true);
+    
+    // محاكاة رد من الطرف الآخر
+    setTimeout(() => {
+        const replyData = {
+            id: 'msg_' + (Date.now() + 1),
+            senderId: 'other_user',
+            senderName: window.currentRole === 'rakib' ? 'السائق' : 'الراكب',
+            message: 'تم استلام رسالتك، شكراً لك',
+            timestamp: Date.now()
+        };
+        window.messages.push(replyData);
+        displayMessage(replyData, false);
+    }, 2000);
+}
+
+function handleChatKeyPress(event) {
+    if (event.key === 'Enter') {
+        sendMessage();
+    }
 }
 
 function displayMessage(messageData, isSent) {
-const messagesContainer = document.getElementById('chatMessages');
-const messageDiv = document.createElement('div');
-messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
-messageDiv.innerHTML = `
-<div class="message-content">${messageData.message}</div>
-<div class="message-time">${new Date(messageData.timestamp).toLocaleTimeString('ar-SA')}</div>
-`;
-messagesContainer.appendChild(messageDiv);
-messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    const messagesContainer = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+    messageDiv.innerHTML = `
+        <div class="message-content">${messageData.message}</div>
+        <div class="message-time" style="font-size: 12px; opacity: 0.7; margin-top: 5px;">
+            ${new Date(messageData.timestamp).toLocaleTimeString('ar-SA')}
+        </div>
+    `;
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function loadChatMessages() {
-// تحميل رسائل الدردشة
-document.getElementById('chatMessages').innerHTML = '';
+    const messagesContainer = document.getElementById('chatMessages');
+    messagesContainer.innerHTML = '';
+    
+    // عرض رسالة ترحيبية
+    const welcomeMessage = {
+        id: 'welcome',
+        senderId: 'system',
+        senderName: 'النظام',
+        message: 'مرحباً! يمكنك التواصل مع ' + (window.currentRole === 'rakib' ? 'السائق' : 'الراكب') + ' من هنا',
+        timestamp: Date.now()
+    };
+    displayMessage(welcomeMessage, false);
 }
 
-</script>
+function showAutoDistance() {
+    if (!window.currentTrip) return;
+    
+    const autoDistanceDiv = document.getElementById('autoDistance');
+    const autoDistanceValue = document.getElementById('autoDistanceValue');
+    const autoPrice = document.getElementById('autoPrice');
+    
+    const distance = window.currentTrip.distance.toFixed(1);
+    const price = window.currentTrip.price;
+    
+    autoDistanceValue.textContent = distance + ' كم';
+    autoPrice.textContent = 'الثمن: ' + price.toLocaleString() + ' دينار';
+    autoDistanceDiv.style.display = 'block';
+}
 
-<script>
+function updateTripStatus() {
+    if (!window.currentTrip) return;
+    
+    const tripStatus = document.getElementById('tripStatus');
+    const tripStatusText = document.getElementById('tripStatusText');
+    
+    let statusText = '';
+    switch (window.currentTrip.status) {
+        case 'requested':
+            statusText = '⏳ في انتظار موافقة السائق...';
+            break;
+        case 'accepted':
+            statusText = '✅ تم قبول الرحلة - السائق في الطريق إليك';
+            break;
+        case 'picked_up':
+            statusText = '🚗 تم تركيب الراكب - الرحلة جارية';
+            break;
+        case 'completed':
+            statusText = '🏁 تم إنهاء الرحلة بنجاح';
+            break;
+        case 'cancelled':
+            statusText = '❌ تم إلغاء الرحلة';
+            break;
+    }
+    
+    tripStatusText.innerHTML = statusText;
+    tripStatus.style.display = 'block';
+}
+
+function showTripRequest() {
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    notification.innerHTML = `
+        <div class="notification-title">
+            <i class="fas fa-car"></i> طلب رحلة جديد
+        </div>
+        <div class="notification-content">
+            لديك طلب رحلة جديد من راكب قريب منك
+            <br><strong>المسافة:</strong> 2.5 كم
+            <br><strong>السعر المتوقع:</strong> ${calculatePrice(2.5).toLocaleString()} دينار
+        </div>
+        <div class="notification-actions">
+            <button class="accept-btn" onclick="acceptTripRequest(this.parentElement.parentElement)">
+                <i class="fas fa-check"></i> قبول
+            </button>
+            <button class="reject-btn" onclick="rejectTripRequest(this.parentElement.parentElement)">
+                <i class="fas fa-times"></i> رفض
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    setTimeout(() => notification.classList.add('show'), 100);
+}
+
+function acceptTripRequest(notification) {
+    window.currentTrip = {
+        id: 'trip_' + Date.now(),
+        passengerId: 'passenger_123',
+        passengerName: 'راكب تجريبي',
+        driverId: window.currentUser.uid,
+        driverName: window.currentUser.displayName,
+        status: 'accepted',
+        timestamp: Date.now(),
+        distance: 2.5,
+        price: calculatePrice(2.5)
+    };
+    
+    showNotification('تم القبول', 'تم قبول طلب الرحلة', 'success');
+    updateTripStatus();
+    document.getElementById('tripControls').style.display = 'block';
+    document.getElementById('pickupBtn').style.display = 'block';
+    showAutoDistance();
+    
+    notification.remove();
+}
+
+function rejectTripRequest(notification) {
+    showNotification('تم الرفض', 'تم رفض طلب الرحلة', 'info');
+    notification.remove();
+}
+
+function loadNearbyDrivers() {
+    // محاكاة السائقين القريبين
+    window.drivers = [
+        {
+            id: 'driver1',
+            name: 'أحمد محمد',
+            rating: 4.8,
+            car: 'تويوتا كامري - أبيض',
+            lat: 33.3152 + (Math.random() - 0.5) * 0.01,
+            lng: 44.3661 + (Math.random() - 0.5) * 0.01,
+            distance: 2.5
+        },
+        {
+            id: 'driver2',
+            name: 'محمد علي',
+            rating: 4.6,
+            car: 'هيونداي إلنترا - أسود',
+            lat: 33.3152 + (Math.random() - 0.5) * 0.01,
+            lng: 44.3661 + (Math.random() - 0.5) * 0.01,
+            distance: 3.2
+        },
+        {
+            id: 'driver3',
+            name: 'علي حسن',
+            rating: 4.9,
+            car: 'كيا سيراتو - فضي',
+            lat: 33.3152 + (Math.random() - 0.5) * 0.01,
+            lng: 44.3661 + (Math.random() - 0.5) * 0.01,
+            distance: 1.8
+        }
+    ];
+    
+    const driversContainer = document.getElementById('driversList');
+    driversContainer.innerHTML = '';
+    
+    window.drivers.forEach(driver => {
+        const price = calculatePrice(driver.distance);
+        const driverCard = document.createElement('div');
+        driverCard.className = 'driver-card';
+        driverCard.innerHTML = `
+            <div class="driver-info">
+                <div>
+                    <div class="driver-name">${driver.name}</div>
+                    <div style="color: #ffd700; margin: 5px 0;">
+                        ${'★'.repeat(Math.floor(driver.rating))} ${driver.rating}
+                    </div>
+                    <div style="color: #718096; font-size: 14px;">${driver.car}</div>
+                    <div style="color: #2d3748; font-weight: 600; margin-top: 8px;">
+                        المسافة: ${driver.distance} كم
+                    </div>
+                    <div style="color: #38a169; font-weight: 700; font-size: 16px;">
+                        السعر: ${price.toLocaleString()} دينار
+                    </div>
+                </div>
+                <div class="driver-distance">${driver.distance} كم</div>
+            </div>
+            <div class="driver-actions">
+                <button onclick="requestRide('${driver.id}')" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                    <i class="fas fa-car"></i> طلب رحلة
+                </button>
+                <button onclick="openChat('${driver.id}', '${driver.name}')" style="background: linear-gradient(135deg, #38a169, #2f855a);">
+                    <i class="fas fa-comments"></i> دردشة
+                </button>
+            </div>
+        `;
+        driversContainer.appendChild(driverCard);
+    });
+}
+
+function openChat(partnerId, partnerName) {
+    window.currentChatPartner = partnerId;
+    document.getElementById('chatTitle').innerHTML = `<i class="fas fa-comments"></i> دردشة مع ${partnerName}`;
+    toggleChat();
+}
+
+function setupUserInterface() {
+    if (window.currentRole === 'rakib') {
+        document.getElementById('passengerContent').style.display = 'block';
+        document.getElementById('driverContent').style.display = 'none';
+        document.getElementById('sidebarTitle').innerHTML = '🚗 البحث عن رحلة';
+    } else {
+        document.getElementById('passengerContent').style.display = 'none';
+        document.getElementById('driverContent').style.display = 'block';
+        document.getElementById('sidebarTitle').innerHTML = '🚗 لوحة السائق';
+    }
+}
+
+function updateDriverStatus() {
+    const status = document.getElementById('driverStatus').value;
+    let statusText = '';
+    switch (status) {
+        case 'available':
+            statusText = 'متاح لاستقبال الرحلات';
+            break;
+        case 'busy':
+            statusText = 'مشغول حالياً';
+            break;
+        case 'offline':
+            statusText = 'غير متصل';
+            break;
+    }
+    showNotification('تم التحديث', statusText, 'success');
+}
+
+function logout() {
+    if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+        window.currentUser = null;
+        window.currentRole = null;
+        window.currentTrip = null;
+        document.getElementById('mapPage').style.display = 'none';
+        document.getElementById('loginPage').style.display = 'block';
+        showMessage('تم تسجيل الخروج بنجاح', 'success');
+    }
+}
+
+function showNotification(title, message, type) {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <div class="notification-title">${title}</div>
+        <div class="notification-content">${message}</div>
+    `;
+    
+    document.body.appendChild(notification);
+    setTimeout(() => notification.classList.add('show'), 100);
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
+}
+
+function showMessage(message, type) {
+    const messageDiv = document.getElementById(type === 'error' ? 'errorMessage' : 'successMessage');
+    messageDiv.textContent = message;
+    messageDiv.style.display = 'block';
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 3000);
+}
+
+function loadMap(userName) {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+            window.currentLocation = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            };
+
+            if (typeof L !== 'undefined' && document.getElementById('map')) {
+                window.currentMap = L.map('map').setView([window.currentLocation.lat, window.currentLocation.lng], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(window.currentMap);
+                
+                L.marker([window.currentLocation.lat, window.currentLocation.lng])
+                    .addTo(window.currentMap)
+                    .bindPopup(`موقع ${userName}`)
+                    .openPopup();
+            }
+        }, (error) => {
+            // استخدام موقع افتراضي (بغداد) في حالة عدم توفر الموقع
+            window.currentLocation = {
+                lat: 33.3152,
+                lng: 44.3661
+            };
+            
+            if (typeof L !== 'undefined' && document.getElementById('map')) {
+                window.currentMap = L.map('map').setView([33.3152, 44.3661], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(window.currentMap);
+                
+                L.marker([33.3152, 44.3661])
+                    .addTo(window.currentMap)
+                    .bindPopup(`موقع ${userName} (افتراضي)`)
+                    .openPopup();
+            }
+        });
+    }
+}
+
+// تهيئة التطبيق عند تحميل الصفحة
 window.addEventListener('load', function() {
-// تهيئة المتغيرات العامة
-window.currentRole = 'rakib';
-window.currentUser = { uid: 'user1', displayName: 'مستخدم تجريبي' };
+    console.log('[v0] تم تحميل تطبيق GRASIAS بنجاح');
     
-// تهيئة الخريطة إذا كانت متوفرة
-if (typeof L !== 'undefined') {
-initializeMap();
-}
-
-// إضافة event listener لإرسال الرسائل بالضغط على Enter
-document.getElementById('messageInput').addEventListener('keypress', function(e) {
-if (e.key === 'Enter') {
-sendMessage();
-}
+    // تهيئة الخريطة إذا كانت متوفرة
+    if (typeof L !== 'undefined') {
+        console.log('[v0] مكتبة Leaflet متوفرة');
+    }
 });
-    
-console.log('تم تحميل التطبيق بنجاح');
-});
-
-function initializeMap() {
-// تهيئة الخريطة
-if (document.getElementById('map')) {
-window.currentMap = L.map('map').setView([33.3152, 44.3661], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.currentMap);
-}
-}
 </script>
 
 </body>
