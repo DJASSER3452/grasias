@@ -859,18 +859,25 @@ box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
 
 <script>
-window.currentUser = null;
-window.currentRole = null;
-window.currentTrip = null;
-window.currentChatPartner = null;
-window.selectedDriver = null;
-window.currentLocation = null;
-window.currentMap = null;
-window.selectedRating = 0;
-window.drivers = [];
-window.messages = [];
+const firebaseConfig = {
+    apiKey: "AIzaSyBvOyeRxIloglkmpolnHFfv2DD_6BbOk-0",
+    authDomain: "grasias-app.firebaseapp.com",
+    databaseURL: "https://grasias-app-default-rtdb.firebaseio.com/",
+    projectId: "grasias-app",
+    storageBucket: "grasias-app.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef123456"
+};
+
+// تهيئة Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const database = firebase.database();
 
 function signInWithGoogle() {
     const roleInput = document.querySelector('input[name="role"]:checked');
@@ -884,439 +891,161 @@ function signInWithGoogle() {
     loginBtn.innerHTML = '<span class="loading"></span> جاري تسجيل الدخول...';
     loginBtn.disabled = true;
 
-    // محاكاة تسجيل الدخول
-    setTimeout(() => {
-        window.currentUser = {
-            uid: 'user_' + Date.now(),
-            displayName: selectedRole === 'rakib' ? 'راكب تجريبي' : 'سائق تجريبي',
-            email: 'test@example.com'
-        };
-        window.currentRole = selectedRole;
-        
-        showMessage('تم تسجيل الدخول بنجاح!', 'success');
-        setTimeout(() => {
-            document.getElementById('loginPage').style.display = 'none';
-            document.getElementById('mapPage').style.display = 'block';
-            loadMap(window.currentUser.displayName);
-            setupUserInterface();
-        }, 1500);
-    }, 2000);
+    const provider = new firebase.auth.GoogleAuthProvider();
+    
+    auth.signInWithPopup(provider)
+        .then((result) => {
+            const user = result.user;
+            window.currentUser = {
+                uid: user.uid,
+                displayName: user.displayName,
+                email: user.email,
+                photoURL: user.photoURL
+            };
+            window.currentRole = selectedRole;
+            
+            // حفظ بيانات المستخدم في قاعدة البيانات
+            database.ref('users/' + user.uid).set({
+                name: user.displayName,
+                email: user.email,
+                role: selectedRole,
+                photoURL: user.photoURL,
+                lastActive: firebase.database.ServerValue.TIMESTAMP,
+                status: selectedRole === 'sayeq' ? 'offline' : 'active'
+            });
+            
+            showMessage('تم تسجيل الدخول بنجاح!', 'success');
+            setTimeout(() => {
+                document.getElementById('loginPage').style.display = 'none';
+                document.getElementById('mapPage').style.display = 'block';
+                loadMap(user.displayName);
+                setupUserInterface();
+                
+                if (selectedRole === 'rakib') {
+                    loadRealDrivers();
+                }
+            }, 1500);
+        })
+        .catch((error) => {
+            console.error('خطأ في تسجيل الدخول:', error);
+            showMessage('فشل في تسجيل الدخول: ' + error.message, 'error');
+            loginBtn.innerHTML = '<i class="fab fa-google" style="margin-left: 8px;"></i>تسجيل الدخول بجوجل';
+            loginBtn.disabled = false;
+        });
 }
 
 function activateRide() {
     if (window.currentRole === 'rakib') {
-        loadNearbyDrivers();
+        loadRealDrivers();
         showNotification('جاري البحث', 'البحث عن السائقين القريبين...', 'info');
     } else {
-        const status = document.getElementById('driverStatus').value;
-        if (status === 'offline') {
-            document.getElementById('driverStatus').value = 'available';
-            updateDriverStatus();
-        }
-        showNotification('تم تفعيل الخدمة', 'أنت الآن متاح لاستقبال طلبات الرحلات', 'success');
-        // محاكاة طلب رحلة للسائق
-        setTimeout(() => {
-            showTripRequest();
-        }, 5000);
-    }
-}
-
-function calculatePrice(distance = null) {
-    const distanceInput = document.getElementById('distanceInput');
-    const priceDisplay = document.getElementById('priceDisplay');
-    const calculatedPrice = document.getElementById('calculatedPrice');
-    
-    const dist = distance || parseFloat(distanceInput.value) || 0;
-    if (dist > 0) {
-        const basePrice = 2000; // السعر الأساسي
-        const pricePerKm = 500; // السعر لكل كيلومتر
-        const totalPrice = basePrice + (dist * pricePerKm);
-        
-        calculatedPrice.textContent = totalPrice.toLocaleString();
-        priceDisplay.style.display = 'block';
-        
-        return totalPrice;
-    }
-    return 0;
-}
-
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // نصف قطر الأرض بالكيلومتر
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
-
-function requestRide(driverId) {
-    if (!window.currentLocation) {
-        showNotification('خطأ', 'لم يتم تحديد موقعك', 'error');
-        return;
-    }
-
-    const driver = window.drivers.find(d => d.id === driverId);
-    if (!driver) return;
-
-    const distance = calculateDistance(
-        window.currentLocation.lat, window.currentLocation.lng,
-        driver.lat, driver.lng
-    );
-
-    window.currentTrip = {
-        id: 'trip_' + Date.now(),
-        passengerId: window.currentUser.uid,
-        passengerName: window.currentUser.displayName,
-        driverId: driverId,
-        driverName: driver.name,
-        status: 'requested',
-        timestamp: Date.now(),
-        passengerLocation: window.currentLocation,
-        driverLocation: { lat: driver.lat, lng: driver.lng },
-        distance: distance,
-        price: calculatePrice(distance)
-    };
-
-    window.selectedDriver = driverId;
-    showNotification('تم الإرسال', 'تم إرسال طلب الرحلة للسائق', 'success');
-    
-    // محاكاة قبول السائق
-    setTimeout(() => {
-        acceptTrip();
-    }, 3000);
-}
-
-function acceptTrip() {
-    if (!window.currentTrip) return;
-    
-    window.currentTrip.status = 'accepted';
-    window.currentTrip.acceptedAt = Date.now();
-    
-    showNotification('تم القبول', 'تم قبول الرحلة من السائق', 'success');
-    updateTripStatus();
-    document.getElementById('tripControls').style.display = 'block';
-    
-    if (window.currentRole === 'sayeq') {
-        document.getElementById('pickupBtn').style.display = 'block';
-    }
-    
-    // عرض المسافة التلقائية
-    showAutoDistance();
-}
-
-function cancelTrip() {
-    if (!window.currentTrip) return;
-
-    window.currentTrip.status = 'cancelled';
-    window.currentTrip.cancelledAt = Date.now();
-    window.currentTrip.cancelledBy = window.currentRole;
-
-    showNotification('تم الإلغاء', 'تم إلغاء الرحلة', 'info');
-    window.currentTrip = null;
-    document.getElementById('tripControls').style.display = 'none';
-    document.getElementById('tripStatus').style.display = 'none';
-    document.getElementById('autoDistance').style.display = 'none';
-}
-
-function confirmPickup() {
-    if (!window.currentTrip) return;
-
-    window.currentTrip.status = 'picked_up';
-    window.currentTrip.pickedUpAt = Date.now();
-
-    showNotification('تم التركيب', 'تم تركيب الراكب', 'success');
-    document.getElementById('pickupBtn').style.display = 'none';
-    document.getElementById('completeBtn').style.display = 'block';
-    updateTripStatus();
-}
-
-function completeTrip() {
-    if (!window.currentTrip) return;
-
-    window.currentTrip.status = 'completed';
-    window.currentTrip.completedAt = Date.now();
-
-    showNotification('اكتملت الرحلة', 'تم إنهاء الرحلة بنجاح', 'success');
-    
-    if (window.currentRole === 'rakib') {
-        document.getElementById('ratingModal').style.display = 'flex';
-    }
-    
-    window.currentTrip = null;
-    document.getElementById('tripControls').style.display = 'none';
-    document.getElementById('tripStatus').style.display = 'none';
-    document.getElementById('autoDistance').style.display = 'none';
-}
-
-function setRating(rating) {
-    window.selectedRating = rating;
-    const stars = document.querySelectorAll('.star');
-    stars.forEach((star, index) => {
-        star.classList.toggle('active', index < rating);
-    });
-}
-
-function submitRating() {
-    const comment = document.getElementById('ratingComment').value;
-    if (window.selectedRating === 0) {
-        showNotification('خطأ', 'يرجى اختيار تقييم', 'error');
-        return;
-    }
-
-    const ratingData = {
-        driverId: window.selectedDriver,
-        passengerId: window.currentUser.uid,
-        rating: window.selectedRating,
-        comment: comment,
-        timestamp: Date.now()
-    };
-
-    showNotification('شكراً لك', 'تم إرسال التقييم', 'success');
-    closeRatingModal();
-}
-
-function closeRatingModal() {
-    document.getElementById('ratingModal').style.display = 'none';
-    window.selectedRating = 0;
-    document.getElementById('ratingComment').value = '';
-    const stars = document.querySelectorAll('.star');
-    stars.forEach(star => star.classList.remove('active'));
-}
-
-function toggleChat() {
-    const chatContainer = document.getElementById('chatContainer');
-    if (chatContainer.style.display === 'none' || !chatContainer.style.display) {
-        chatContainer.style.display = 'flex';
-        loadChatMessages();
-    } else {
-        chatContainer.style.display = 'none';
-    }
-}
-
-function closeChat() {
-    document.getElementById('chatContainer').style.display = 'none';
-}
-
-function sendMessage() {
-    const messageInput = document.getElementById('chatInput');
-    const message = messageInput.value.trim();
-    if (!message) return;
-
-    const messageData = {
-        id: 'msg_' + Date.now(),
-        senderId: window.currentUser.uid,
-        senderName: window.currentUser.displayName,
-        message: message,
-        timestamp: Date.now()
-    };
-
-    window.messages.push(messageData);
-    messageInput.value = '';
-    displayMessage(messageData, true);
-    
-    // محاكاة رد من الطرف الآخر
-    setTimeout(() => {
-        const replyData = {
-            id: 'msg_' + (Date.now() + 1),
-            senderId: 'other_user',
-            senderName: window.currentRole === 'rakib' ? 'السائق' : 'الراكب',
-            message: 'تم استلام رسالتك، شكراً لك',
-            timestamp: Date.now()
+        // تفعيل السائق في قاعدة البيانات
+        const driverData = {
+            name: window.currentUser.displayName,
+            email: window.currentUser.email,
+            photoURL: window.currentUser.photoURL,
+            status: 'available',
+            location: window.currentLocation,
+            availableSeats: document.getElementById('availableSeats').value,
+            notes: document.getElementById('driverNotes').value,
+            rating: 4.5, // تقييم افتراضي
+            car: 'سيارة خاصة',
+            lastActive: firebase.database.ServerValue.TIMESTAMP
         };
-        window.messages.push(replyData);
-        displayMessage(replyData, false);
-    }, 2000);
-}
-
-function handleChatKeyPress(event) {
-    if (event.key === 'Enter') {
-        sendMessage();
+        
+        database.ref('activeDrivers/' + window.currentUser.uid).set(driverData)
+            .then(() => {
+                document.getElementById('driverStatus').value = 'available';
+                showNotification('تم تفعيل الخدمة', 'أنت الآن متاح لاستقبال طلبات الرحلات', 'success');
+                
+                // الاستماع لطلبات الرحلات
+                listenForTripRequests();
+            })
+            .catch((error) => {
+                showNotification('خطأ', 'فشل في تفعيل الخدمة: ' + error.message, 'error');
+            });
     }
 }
 
-function displayMessage(messageData, isSent) {
-    const messagesContainer = document.getElementById('chatMessages');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
-    messageDiv.innerHTML = `
-        <div class="message-content">${messageData.message}</div>
-        <div class="message-time" style="font-size: 12px; opacity: 0.7; margin-top: 5px;">
-            ${new Date(messageData.timestamp).toLocaleTimeString('ar-SA')}
-        </div>
-    `;
-    messagesContainer.appendChild(messageDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+function loadRealDrivers() {
+    database.ref('activeDrivers').orderByChild('status').equalTo('available')
+        .on('value', (snapshot) => {
+            const drivers = [];
+            snapshot.forEach((childSnapshot) => {
+                const driver = childSnapshot.val();
+                const driverId = childSnapshot.key;
+                
+                if (driverId !== window.currentUser.uid && driver.location) {
+                    const distance = calculateDistance(
+                        window.currentLocation.lat, window.currentLocation.lng,
+                        driver.location.lat, driver.location.lng
+                    );
+                    
+                    drivers.push({
+                        id: driverId,
+                        name: driver.name,
+                        rating: driver.rating || 4.5,
+                        car: driver.car || 'سيارة خاصة',
+                        photoURL: driver.photoURL,
+                        lat: driver.location.lat,
+                        lng: driver.location.lng,
+                        distance: distance,
+                        availableSeats: driver.availableSeats || 4,
+                        notes: driver.notes || ''
+                    });
+                }
+            });
+            
+            // ترتيب السائقين حسب المسافة
+            drivers.sort((a, b) => a.distance - b.distance);
+            window.drivers = drivers;
+            displayDrivers(drivers);
+        });
 }
 
-function loadChatMessages() {
-    const messagesContainer = document.getElementById('chatMessages');
-    messagesContainer.innerHTML = '';
-    
-    // عرض رسالة ترحيبية
-    const welcomeMessage = {
-        id: 'welcome',
-        senderId: 'system',
-        senderName: 'النظام',
-        message: 'مرحباً! يمكنك التواصل مع ' + (window.currentRole === 'rakib' ? 'السائق' : 'الراكب') + ' من هنا',
-        timestamp: Date.now()
-    };
-    displayMessage(welcomeMessage, false);
-}
-
-function showAutoDistance() {
-    if (!window.currentTrip) return;
-    
-    const autoDistanceDiv = document.getElementById('autoDistance');
-    const autoDistanceValue = document.getElementById('autoDistanceValue');
-    const autoPrice = document.getElementById('autoPrice');
-    
-    const distance = window.currentTrip.distance.toFixed(1);
-    const price = window.currentTrip.price;
-    
-    autoDistanceValue.textContent = distance + ' كم';
-    autoPrice.textContent = 'الثمن: ' + price.toLocaleString() + ' دينار';
-    autoDistanceDiv.style.display = 'block';
-}
-
-function updateTripStatus() {
-    if (!window.currentTrip) return;
-    
-    const tripStatus = document.getElementById('tripStatus');
-    const tripStatusText = document.getElementById('tripStatusText');
-    
-    let statusText = '';
-    switch (window.currentTrip.status) {
-        case 'requested':
-            statusText = '⏳ في انتظار موافقة السائق...';
-            break;
-        case 'accepted':
-            statusText = '✅ تم قبول الرحلة - السائق في الطريق إليك';
-            break;
-        case 'picked_up':
-            statusText = '🚗 تم تركيب الراكب - الرحلة جارية';
-            break;
-        case 'completed':
-            statusText = '🏁 تم إنهاء الرحلة بنجاح';
-            break;
-        case 'cancelled':
-            statusText = '❌ تم إلغاء الرحلة';
-            break;
-    }
-    
-    tripStatusText.innerHTML = statusText;
-    tripStatus.style.display = 'block';
-}
-
-function showTripRequest() {
-    const notification = document.createElement('div');
-    notification.className = 'notification';
-    notification.innerHTML = `
-        <div class="notification-title">
-            <i class="fas fa-car"></i> طلب رحلة جديد
-        </div>
-        <div class="notification-content">
-            لديك طلب رحلة جديد من راكب قريب منك
-            <br><strong>المسافة:</strong> 2.5 كم
-            <br><strong>السعر المتوقع:</strong> ${calculatePrice(2.5).toLocaleString()} دينار
-        </div>
-        <div class="notification-actions">
-            <button class="accept-btn" onclick="acceptTripRequest(this.parentElement.parentElement)">
-                <i class="fas fa-check"></i> قبول
-            </button>
-            <button class="reject-btn" onclick="rejectTripRequest(this.parentElement.parentElement)">
-                <i class="fas fa-times"></i> رفض
-            </button>
-        </div>
-    `;
-    
-    document.body.appendChild(notification);
-    setTimeout(() => notification.classList.add('show'), 100);
-}
-
-function acceptTripRequest(notification) {
-    window.currentTrip = {
-        id: 'trip_' + Date.now(),
-        passengerId: 'passenger_123',
-        passengerName: 'راكب تجريبي',
-        driverId: window.currentUser.uid,
-        driverName: window.currentUser.displayName,
-        status: 'accepted',
-        timestamp: Date.now(),
-        distance: 2.5,
-        price: calculatePrice(2.5)
-    };
-    
-    showNotification('تم القبول', 'تم قبول طلب الرحلة', 'success');
-    updateTripStatus();
-    document.getElementById('tripControls').style.display = 'block';
-    document.getElementById('pickupBtn').style.display = 'block';
-    showAutoDistance();
-    
-    notification.remove();
-}
-
-function rejectTripRequest(notification) {
-    showNotification('تم الرفض', 'تم رفض طلب الرحلة', 'info');
-    notification.remove();
-}
-
-function loadNearbyDrivers() {
-    // محاكاة السائقين القريبين
-    window.drivers = [
-        {
-            id: 'driver1',
-            name: 'أحمد محمد',
-            rating: 4.8,
-            car: 'تويوتا كامري - أبيض',
-            lat: 33.3152 + (Math.random() - 0.5) * 0.01,
-            lng: 44.3661 + (Math.random() - 0.5) * 0.01,
-            distance: 2.5
-        },
-        {
-            id: 'driver2',
-            name: 'محمد علي',
-            rating: 4.6,
-            car: 'هيونداي إلنترا - أسود',
-            lat: 33.3152 + (Math.random() - 0.5) * 0.01,
-            lng: 44.3661 + (Math.random() - 0.5) * 0.01,
-            distance: 3.2
-        },
-        {
-            id: 'driver3',
-            name: 'علي حسن',
-            rating: 4.9,
-            car: 'كيا سيراتو - فضي',
-            lat: 33.3152 + (Math.random() - 0.5) * 0.01,
-            lng: 44.3661 + (Math.random() - 0.5) * 0.01,
-            distance: 1.8
-        }
-    ];
-    
+function displayDrivers(drivers) {
     const driversContainer = document.getElementById('driversList');
     driversContainer.innerHTML = '';
     
-    window.drivers.forEach(driver => {
+    if (drivers.length === 0) {
+        driversContainer.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #718096;">
+                <i class="fas fa-search" style="font-size: 48px; margin-bottom: 15px;"></i>
+                <p>لا يوجد سائقون متاحون في الوقت الحالي</p>
+                <button onclick="loadRealDrivers()" style="margin-top: 10px; background: #667eea;">
+                    <i class="fas fa-refresh"></i> إعادة البحث
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    drivers.forEach(driver => {
         const price = calculatePrice(driver.distance);
         const driverCard = document.createElement('div');
         driverCard.className = 'driver-card';
         driverCard.innerHTML = `
             <div class="driver-info">
-                <div>
-                    <div class="driver-name">${driver.name}</div>
-                    <div style="color: #ffd700; margin: 5px 0;">
-                        ${'★'.repeat(Math.floor(driver.rating))} ${driver.rating}
-                    </div>
-                    <div style="color: #718096; font-size: 14px;">${driver.car}</div>
-                    <div style="color: #2d3748; font-weight: 600; margin-top: 8px;">
-                        المسافة: ${driver.distance} كم
-                    </div>
-                    <div style="color: #38a169; font-weight: 700; font-size: 16px;">
-                        السعر: ${price.toLocaleString()} دينار
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    <img src="${driver.photoURL || '/placeholder.svg?height=40&width=40'}" 
+                         alt="${driver.name}" 
+                         style="width: 40px; height: 40px; border-radius: 50%; margin-left: 10px;">
+                    <div>
+                        <div class="driver-name">${driver.name}</div>
+                        <div style="color: #ffd700; margin: 2px 0;">
+                            ${'★'.repeat(Math.floor(driver.rating))} ${driver.rating}
+                        </div>
                     </div>
                 </div>
-                <div class="driver-distance">${driver.distance} كم</div>
+                <div style="color: #718096; font-size: 14px; margin-bottom: 5px;">${driver.car}</div>
+                <div style="color: #718096; font-size: 12px; margin-bottom: 8px;">المقاعد المتاحة: ${driver.availableSeats}</div>
+                ${driver.notes ? `<div style="color: #4a5568; font-size: 12px; margin-bottom: 8px;">${driver.notes}</div>` : ''}
+                <div style="color: #2d3748; font-weight: 600; margin-bottom: 5px;">
+                    المسافة: ${driver.distance.toFixed(1)} كم
+                </div>
+                <div style="color: #38a169; font-weight: 700; font-size: 16px;">
+                    السعر: ${price.toLocaleString()} دينار
+                </div>
             </div>
             <div class="driver-actions">
                 <button onclick="requestRide('${driver.id}')" style="background: linear-gradient(135deg, #667eea, #764ba2);">
@@ -1331,127 +1060,109 @@ function loadNearbyDrivers() {
     });
 }
 
-function openChat(partnerId, partnerName) {
-    window.currentChatPartner = partnerId;
-    document.getElementById('chatTitle').innerHTML = `<i class="fas fa-comments"></i> دردشة مع ${partnerName}`;
-    toggleChat();
+function listenForTripRequests() {
+    database.ref('tripRequests').orderByChild('driverId').equalTo(window.currentUser.uid)
+        .on('child_added', (snapshot) => {
+            const tripRequest = snapshot.val();
+            if (tripRequest.status === 'requested') {
+                showTripRequestNotification(tripRequest, snapshot.key);
+            }
+        });
 }
 
-function setupUserInterface() {
-    if (window.currentRole === 'rakib') {
-        document.getElementById('passengerContent').style.display = 'block';
-        document.getElementById('driverContent').style.display = 'none';
-        document.getElementById('sidebarTitle').innerHTML = '🚗 البحث عن رحلة';
-    } else {
-        document.getElementById('passengerContent').style.display = 'none';
-        document.getElementById('driverContent').style.display = 'block';
-        document.getElementById('sidebarTitle').innerHTML = '🚗 لوحة السائق';
-    }
-}
-
-function updateDriverStatus() {
-    const status = document.getElementById('driverStatus').value;
-    let statusText = '';
-    switch (status) {
-        case 'available':
-            statusText = 'متاح لاستقبال الرحلات';
-            break;
-        case 'busy':
-            statusText = 'مشغول حالياً';
-            break;
-        case 'offline':
-            statusText = 'غير متصل';
-            break;
-    }
-    showNotification('تم التحديث', statusText, 'success');
-}
-
-function logout() {
-    if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
-        window.currentUser = null;
-        window.currentRole = null;
-        window.currentTrip = null;
-        document.getElementById('mapPage').style.display = 'none';
-        document.getElementById('loginPage').style.display = 'block';
-        showMessage('تم تسجيل الخروج بنجاح', 'success');
-    }
-}
-
-function showNotification(title, message, type) {
+function showTripRequestNotification(tripRequest, requestId) {
     const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
+    notification.className = 'trip-request-notification';
     notification.innerHTML = `
-        <div class="notification-title">${title}</div>
-        <div class="notification-content">${message}</div>
+        <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 400px;">
+            <h3 style="color: #2d3748; margin-bottom: 15px;">
+                <i class="fas fa-bell"></i> طلب رحلة جديد
+            </h3>
+            <p><strong>الراكب:</strong> ${tripRequest.passengerName}</p>
+            <p><strong>المسافة:</strong> ${tripRequest.distance.toFixed(1)} كم</p>
+            <p><strong>السعر:</strong> ${tripRequest.price.toLocaleString()} دينار</p>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button onclick="acceptTripRequest('${requestId}')" 
+                        style="background: #38a169; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-check"></i> قبول
+                </button>
+                <button onclick="rejectTripRequest('${requestId}')" 
+                        style="background: #e53e3e; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-times"></i> رفض
+                </button>
+            </div>
+        </div>
     `;
     
     document.body.appendChild(notification);
-    setTimeout(() => notification.classList.add('show'), 100);
-    setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 300);
-    }, 4000);
-}
-
-function showMessage(message, type) {
-    const messageDiv = document.getElementById(type === 'error' ? 'errorMessage' : 'successMessage');
-    messageDiv.textContent = message;
-    messageDiv.style.display = 'block';
-    setTimeout(() => {
-        messageDiv.style.display = 'none';
-    }, 3000);
-}
-
-function loadMap(userName) {
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((position) => {
-            window.currentLocation = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude
-            };
-
-            if (typeof L !== 'undefined' && document.getElementById('map')) {
-                window.currentMap = L.map('map').setView([window.currentLocation.lat, window.currentLocation.lng], 15);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(window.currentMap);
-                
-                L.marker([window.currentLocation.lat, window.currentLocation.lng])
-                    .addTo(window.currentMap)
-                    .bindPopup(`موقع ${userName}`)
-                    .openPopup();
-            }
-        }, (error) => {
-            // استخدام موقع افتراضي (بغداد) في حالة عدم توفر الموقع
-            window.currentLocation = {
-                lat: 33.3152,
-                lng: 44.3661
-            };
-            
-            if (typeof L !== 'undefined' && document.getElementById('map')) {
-                window.currentMap = L.map('map').setView([33.3152, 44.3661], 13);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(window.currentMap);
-                
-                L.marker([33.3152, 44.3661])
-                    .addTo(window.currentMap)
-                    .bindPopup(`موقع ${userName} (افتراضي)`)
-                    .openPopup();
-            }
-        });
-    }
-}
-
-// تهيئة التطبيق عند تحميل الصفحة
-window.addEventListener('load', function() {
-    console.log('[v0] تم تحميل تطبيق GRASIAS بنجاح');
     
-    // تهيئة الخريطة إذا كانت متوفرة
-    if (typeof L !== 'undefined') {
-        console.log('[v0] مكتبة Leaflet متوفرة');
+    // إزالة الإشعار بعد 30 ثانية
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 30000);
+}
+
+function acceptTripRequest(requestId) {
+    database.ref('tripRequests/' + requestId).update({
+        status: 'accepted',
+        acceptedAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        showNotification('تم القبول', 'تم قبول طلب الرحلة بنجاح', 'success');
+        // إزالة الإشعار
+        const notification = document.querySelector('.trip-request-notification');
+        if (notification) notification.remove();
+    });
+}
+
+function rejectTripRequest(requestId) {
+    database.ref('tripRequests/' + requestId).update({
+        status: 'rejected',
+        rejectedAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        showNotification('تم الرفض', 'تم رفض طلب الرحلة', 'info');
+        // إزالة الإشعار
+        const notification = document.querySelector('.trip-request-notification');
+        if (notification) notification.remove();
+    });
+}
+
+function requestRide(driverId) {
+    if (!window.currentLocation) {
+        showNotification('خطأ', 'لم يتم تحديد موقعك', 'error');
+        return;
     }
-});
+
+    const driver = window.drivers.find(d => d.id === driverId);
+    if (!driver) return;
+
+    const distance = driver.distance;
+    const price = calculatePrice(distance);
+
+    const tripRequest = {
+        passengerId: window.currentUser.uid,
+        passengerName: window.currentUser.displayName,
+        driverId: driverId,
+        driverName: driver.name,
+        status: 'requested',
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        passengerLocation: window.currentLocation,
+        driverLocation: { lat: driver.lat, lng: driver.lng },
+        distance: distance,
+        price: price
+    };
+
+    database.ref('tripRequests').push(tripRequest)
+        .then(() => {
+            window.selectedDriver = driverId;
+            showNotification('تم الإرسال', 'تم إرسال طلب الرحلة للسائق', 'success');
+        })
+        .catch((error) => {
+            showNotification('خطأ', 'فشل في إرسال طلب الرحلة: ' + error.message, 'error');
+        });
+}
+
 </script>
 
 </body>
