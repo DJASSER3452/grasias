@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRASIAS - تطبيق الرحلات المتطور</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+* {
+box-sizing: border-box;
+}
+
+body {
+font-family: 'Cairo', sans-serif;
+background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+margin: 0;
+min-height: 100vh;
+display: flex;
+align-items: center;
+justify-content: center;
+direction: rtl;
+padding: 20px;
+position: relative;
+overflow-x: hidden;
+}
+
+/* Enhanced animated background */
+body::before {
+content: '';
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: 
+  radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+  radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+  radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.3) 0%, transparent 50%);
+animation: backgroundMove 20s ease-in-out infinite;
+z-index: -1;
+}
+
+@keyframes backgroundMove {
+0%, 100% { transform: translateX(0) translateY(0); }
+33% { transform: translateX(-30px) translateY(-30px); }
+66% { transform: translateX(30px) translateY(-30px); }
+}
+
+.box {
+background: rgba(255, 255, 255, 0.95);
+backdrop-filter: blur(20px);
+padding: 35px 30px;
+border-radius: 25px;
+box-shadow: 
+  0 25px 60px rgba(0,0,0,0.15),
+  0 0 0 1px rgba(255,255,255,0.2);
+width: 100%;
+max-width: 420px;
+text-align: center;
+animation: fadeInUp 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+border: 1px solid rgba(255,255,255,0.2);
+}
+
+@keyframes fadeInUp {
+from {
+opacity: 0;
+transform: translateY(40px) scale(0.95);
+}
+to {
+opacity: 1;
+transform: translateY(0) scale(1);
+}
+}
+
+h2 {
+margin-bottom: 30px;
+color: #2d3748;
+font-weight: 700;
+font-size: 28px;
+background: linear-gradient(135deg, #667eea, #764ba2);
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+input, button, textarea, select {
+width: 100%;
+padding: 18px 20px;
+border-radius: 15px;
+margin-bottom: 18px;
+font-size: 16px;
+border: 2px solid rgba(102, 126, 234, 0.1);
+transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+font-family: 'Cairo', sans-serif;
+background: rgba(255,255,255,0.8);
+backdrop-filter: blur(10px);
+}
+
+input:focus, textarea:focus, select:focus {
+border-color: #667eea;
+outline: none;
+box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+background: rgba(255,255,255,0.95);
+transform: translateY(-2px);
+}
+
+button {
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+color: white;
+border: none;
+cursor: pointer;
+font-weight: 600;
+transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+position: relative;
+overflow: hidden;
+}
+
+button::before {
+content: '';
+position: absolute;
+top: 0;
+left: -100%;
+width: 100%;
+height: 100%;
+background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+transition: left 0.5s;
+}
+
+button:hover::before {
+left: 100%;
+}
+
+button:hover {
+transform: translateY(-3px);
+box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
+}
+
+button:active {
+transform: translateY(-1px);
+}
+
+.choice {
+text-align: right;
+margin: 30px 0;
+}
+
+.choice label {
+display: flex;
+align-items: center;
+margin-bottom: 15px;
+font-size: 17px;
+cursor: pointer;
+padding: 15px;
+border-radius: 12px;
+transition: all 0.3s ease;
+background: rgba(102, 126, 234, 0.05);
+border: 2px solid transparent;
+}
+
+.choice label:hover {
+background: rgba(102, 126, 234, 0.1);
+border-color: rgba(102, 126, 234, 0.2);
+transform: translateX(-5px);
+}
+
+.choice input[type="radio"] {
+margin-left: 12px;
+width: 20px;
+height: 20px;
+accent-color: #667eea;
+}
+
+/* Enhanced map and sidebar styles */
+#mapPage {
+display: none;
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+z-index: 100;
+background: #f7fafc;
+}
+
+#map {
+width: 70%;
+height: 100%;
+float: right;
+border-radius: 0 0 0 25px;
+box-shadow: -5px 0 25px rgba(0,0,0,0.1);
+}
+
+.sidebar {
+width: 30%;
+height: 100%;
+background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(247,250,252,0.95) 100%);
+backdrop-filter: blur(20px);
+padding: 25px;
+overflow-y: auto;
+box-shadow: 5px 0 25px rgba(0,0,0,0.1);
+border-right: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.sidebar h3 {
+color: #2d3748;
+font-size: 22px;
+font-weight: 700;
+margin-bottom: 25px;
+padding-bottom: 15px;
+border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+background: linear-gradient(135deg, #667eea, #764ba2);
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+/* Enhanced chat container with modern design */
+.chat-container {
+position: fixed;
+bottom: 25px;
+right: 25px;
+width: 350px;
+height: 450px;
+background: rgba(255,255,255,0.95);
+backdrop-filter: blur(20px);
+border-radius: 20px;
+box-shadow: 
+  0 25px 60px rgba(0,0,0,0.15),
+  0 0 0 1px rgba(255,255,255,0.2);
+display: none;
+flex-direction: column;
+z-index: 1000;
+border: 1px solid rgba(102, 126, 234, 0.1);
+animation: slideInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes slideInUp {
+from {
+opacity: 0;
+transform: translateY(30px) scale(0.95);
+}
+to {
+opacity: 1;
+transform: translateY(0) scale(1);
+}
+}
+
+.chat-header {
+background: linear-gradient(135deg, #667eea, #764ba2);
+color: white;
+padding: 20px;
+border-radius: 20px 20px 0 0;
+display: flex;
+justify-content: space-between;
+align-items: center;
+font-weight: 600;
+box-shadow: 0 2px 10px rgba(102, 126, 234, 0.2);
+}
+
+.chat-messages {
+flex: 1;
+padding: 20px;
+overflow-y: auto;
+max-height: 280px;
+}
+
+.chat-input-container {
+padding: 20px;
+border-top: 1px solid rgba(102, 126, 234, 0.1);
+display: flex;
+gap: 12px;
+background: rgba(247,250,252,0.5);
+border-radius: 0 0 20px 20px;
+}
+
+.chat-input {
+flex: 1;
+padding: 12px 16px;
+border: 2px solid rgba(102, 126, 234, 0.1);
+border-radius: 12px;
+margin: 0;
+background: white;
+transition: all 0.3s ease;
+}
+
+.chat-input:focus {
+border-color: #667eea;
+box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.send-btn {
+background: linear-gradient(135deg, #667eea, #764ba2);
+color: white;
+border: none;
+padding: 12px 20px;
+border-radius: 12px;
+cursor: pointer;
+margin: 0;
+width: auto;
+font-weight: 600;
+transition: all 0.3s ease;
+}
+
+.send-btn:hover {
+transform: translateY(-2px);
+box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
+/* Enhanced message bubbles */
+.message {
+margin-bottom: 15px;
+padding: 12px 18px;
+border-radius: 18px;
+max-width: 85%;
+position: relative;
+animation: messageSlide 0.3s ease;
+word-wrap: break-word;
+}
+
+@keyframes messageSlide {
+from {
+opacity: 0;
+transform: translateY(10px);
+}
+to {
+opacity: 1;
+transform: translateY(0);
+}
+}
+
+.message.sent {
+background: linear-gradient(135deg, #667eea, #764ba2);
+color: white;
+margin-left: auto;
+text-align: left;
+border-bottom-right-radius: 5px;
+box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.message.received {
+background: rgba(247,250,252,0.8);
+color: #2d3748;
+margin-right: auto;
+border-bottom-left-radius: 5px;
+border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+/* Enhanced trip status and controls */
+.trip-status {
+background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+border: 2px solid rgba(102, 126, 234, 0.2);
+border-radius: 15px;
+padding: 20px;
+margin-bottom: 20px;
+text-align: center;
+backdrop-filter: blur(10px);
+}
+
+.trip-controls {
+display: flex;
+gap: 10px;
+margin: 15px 0;
+flex-wrap: wrap;
+}
+
+.trip-controls button {
+flex: 1;
+min-width: 120px;
+padding: 12px 16px;
+font-size: 14px;
+border-radius: 12px;
+font-weight: 600;
+transition: all 0.3s ease;
+}
+
+.cancel-btn {
+background: linear-gradient(135deg, #e53e3e, #c53030) !important;
+}
+
+.cancel-btn:hover {
+box-shadow: 0 8px 20px rgba(229, 62, 62, 0.3) !important;
+}
+
+.pickup-btn {
+background: linear-gradient(135deg, #38a169, #2f855a) !important;
+}
+
+.pickup-btn:hover {
+box-shadow: 0 8px 20px rgba(56, 161, 105, 0.3) !important;
+}
+
+.complete-btn {
+background: linear-gradient(135deg, #3182ce, #2c5282) !important;
+}
+
+.complete-btn:hover {
+box-shadow: 0 8px 20px rgba(49, 130, 206, 0.3) !important;
+}
+
+/* Star rating system */
+.rating-container {
+background: rgba(255,255,255,0.95);
+backdrop-filter: blur(20px);
+border-radius: 20px;
+padding: 30px;
+margin: 20px 0;
+box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.star-rating {
+display: flex;
+justify-content: center;
+gap: 8px;
+margin: 20px 0;
+}
+
+.star {
+font-size: 32px;
+color: #e2e8f0;
+cursor: pointer;
+transition: all 0.3s ease;
+}
+
+.star:hover,
+.star.active {
+color: #ffd700;
+transform: scale(1.1);
+text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.rating-comment {
+width: 100%;
+min-height: 80px;
+padding: 15px;
+border: 2px solid rgba(102, 126, 234, 0.1);
+border-radius: 12px;
+resize: vertical;
+font-family: 'Cairo', sans-serif;
+background: rgba(255,255,255,0.8);
+}
+
+/* Enhanced driver cards */
+.driver-card {
+background: rgba(255,255,255,0.95);
+backdrop-filter: blur(10px);
+border-radius: 15px;
+padding: 20px;
+margin-bottom: 15px;
+border: 2px solid rgba(102, 126, 234, 0.1);
+transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.driver-card:hover {
+transform: translateY(-5px);
+box-shadow: 0 15px 35px rgba(102, 126, 234, 0.15);
+border-color: rgba(102, 126, 234, 0.3);
+}
+
+.driver-info {
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 15px;
+}
+
+.driver-name {
+font-weight: 700;
+font-size: 18px;
+color: #2d3748;
+}
+
+.driver-distance {
+background: linear-gradient(135deg, #667eea, #764ba2);
+color: white;
+padding: 5px 12px;
+border-radius: 20px;
+font-size: 12px;
+font-weight: 600;
+}
+
+.driver-actions {
+display: flex;
+gap: 8px;
+}
+
+.driver-actions button {
+flex: 1;
+padding: 10px 15px;
+font-size: 13px;
+border-radius: 10px;
+margin: 0;
+}
+
+/* Enhanced notifications */
+.notification {
+position: fixed;
+top: 20px;
+right: 20px;
+background: rgba(255,255,255,0.95);
+backdrop-filter: blur(20px);
+border-radius: 15px;
+padding: 20px;
+box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+border: 1px solid rgba(102, 126, 234, 0.2);
+z-index: 2000;
+min-width: 300px;
+animation: slideInRight 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes slideInRight {
+from {
+opacity: 0;
+transform: translateX(100px);
+}
+to {
+opacity: 1;
+transform: translateX(0);
+}
+}
+
+.notification-title {
+font-weight: 700;
+font-size: 16px;
+color: #2d3748;
+margin-bottom: 10px;
+}
+
+.notification-content {
+color: #4a5568;
+margin-bottom: 15px;
+line-height: 1.5;
+}
+
+.notification-actions {
+display: flex;
+gap: 10px;
+}
+
+.accept-btn {
+background: linear-gradient(135deg, #38a169, #2f855a) !important;
+color: white;
+border: none;
+padding: 10px 20px;
+border-radius: 8px;
+cursor: pointer;
+font-weight: 600;
+flex: 1;
+}
+
+.reject-btn {
+background: linear-gradient(135deg, #e53e3e, #c53030) !important;
+color: white;
+border: none;
+padding: 10px 20px;
+border-radius: 8px;
+cursor: pointer;
+font-weight: 600;
+flex: 1;
+}
+
+/* Distance calculator enhancement */
+.distance-calculator {
+background: rgba(102, 126, 234, 0.05);
+border-radius: 15px;
+padding: 20px;
+margin: 20px 0;
+border: 2px solid rgba(102, 126, 234, 0.1);
+}
+
+.distance-calculator h4 {
+color: #2d3748;
+margin-bottom: 15px;
+font-weight: 700;
+}
+
+.distance-input {
+position: relative;
+}
+
+.distance-input::after {
+content: 'كم';
+position: absolute;
+right: 15px;
+top: 50%;
+transform: translateY(-50%);
+color: #718096;
+font-weight: 600;
+}
+
+.price-display {
+background: linear-gradient(135deg, #667eea, #764ba2);
+color: white;
+padding: 15px;
+border-radius: 12px;
+margin-top: 15px;
+text-align: center;
+font-weight: 700;
+font-size: 18px;
+}
+
+/* Auto distance calculation display */
+.auto-distance {
+background: rgba(56, 161, 105, 0.1);
+border: 2px solid rgba(56, 161, 105, 0.2);
+border-radius: 12px;
+padding: 15px;
+margin: 15px 0;
+text-align: center;
+}
+
+.auto-distance-value {
+font-size: 20px;
+font-weight: 700;
+color: #2f855a;
+}
+
+/* Success and error messages */
+.success-message {
+background: linear-gradient(135deg, rgba(56, 161, 105, 0.1), rgba(47, 133, 90, 0.1));
+border: 2px solid rgba(56, 161, 105, 0.3);
+color: #2f855a;
+padding: 15px;
+border-radius: 12px;
+margin: 15px 0;
+text-align: center;
+font-weight: 600;
+}
+
+.error-message {
+background: linear-gradient(135deg, rgba(229, 62, 62, 0.1), rgba(197, 48, 48, 0.1));
+border: 2px solid rgba(229, 62, 62, 0.3);
+color: #c53030;
+padding: 15px;
+border-radius: 12px;
+margin: 15px 0;
+text-align: center;
+font-weight: 600;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+#map {
+width: 100%;
+height: 60%;
+float: none;
+border-radius: 0;
+}
+
+.sidebar {
+width: 100%;
+height: 40%;
+position: fixed;
+bottom: 0;
+border-radius: 25px 25px 0 0;
+}
+
+.chat-container {
+width: 90%;
+height: 70%;
+bottom: 50%;
+right: 5%;
+transform: translateY(50%);
+}
+
+.trip-controls {
+flex-direction: column;
+}
+
+.trip-controls button {
+min-width: auto;
+}
+}
+
+/* Loading animations */
+.loading {
+display: inline-block;
+width: 20px;
+height: 20px;
+border: 3px solid rgba(255,255,255,.3);
+border-radius: 50%;
+border-top-color: #fff;
+animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+to { transform: rotate(360deg); }
+}
+
+/* Pulse animation for active elements */
+.pulse {
+animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+0% {
+box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
+}
+70% {
+box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+}
+100% {
+box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
+}
+}
+</style>
+</head>
+<body>
+
+<!-- صفحة تسجيل الدخول -->
+<div id="loginPage" class="box">
+<h2>🚗 مرحباً بك في GRASIAS</h2>
+<p style="color: #718096; margin-bottom: 25px; font-size: 16px;">تطبيق الرحلات الذكي والمتطور</p>
+
+<div class="choice">
+<label>
+<input type="radio" name="role" value="rakib">
+<i class="fas fa-user" style="margin-left: 10px; color: #667eea;"></i>
+راكب - أبحث عن رحلة
+</label>
+<label>
+<input type="radio" name="role" value="sayeq">
+<i class="fas fa-car" style="margin-left: 10px; color: #667eea;"></i>
+سائق - أقدم خدمة النقل
+</label>
+</div>
+
+<button onclick="signInWithGoogle()">
+<i class="fab fa-google" style="margin-left: 8px;"></i>
+تسجيل الدخول بجوجل
+</button>
+
+<div id="successMessage" style="display: none;" class="success-message"></div>
+<div id="errorMessage" style="display: none;" class="error-message"></div>
+</div>
+
+<!-- صفحة الخريطة -->
+<div id="mapPage">
+<div id="map"></div>
+<div class="sidebar">
+<div id="tripStatus" class="trip-status" style="display: none;">
+<div id="tripStatusText"></div>
+<!-- Added trip control buttons -->
+<div class="trip-controls" id="tripControls" style="display: none;">
+<button class="cancel-btn" onclick="cancelTrip()">
+<i class="fas fa-times"></i> إلغاء الرحلة
+</button>
+<button class="pickup-btn" id="pickupBtn" onclick="confirmPickup()" style="display: none;">
+<i class="fas fa-check"></i> تم تركيب الراكب
+</button>
+<button class="complete-btn" id="completeBtn" onclick="completeTrip()" style="display: none;">
+<i class="fas fa-flag-checkered"></i> اكتملت الرحلة
+</button>
+</div>
+</div>
+
+<!-- Auto distance display -->
+<div id="autoDistance" class="auto-distance" style="display: none;">
+<div>المسافة التلقائية</div>
+<div class="auto-distance-value" id="autoDistanceValue">0 كم</div>
+<div id="autoPrice" style="margin-top: 10px; font-weight: 600;">الثمن: 0 دينار</div>
+</div>
+
+<h3 id="sidebarTitle">🚗 تفاصيل الرحلة</h3>
+
+<!-- محتوى الراكب -->
+<div id="passengerContent">
+<div id="nearbyDrivers">
+<h4><i class="fas fa-search"></i> السائقون القريبون:</h4>
+<div id="driversList"></div>
+</div>
+</div>
+
+<!-- محتوى السائق -->
+<div id="driverContent" style="display: none;">
+<label><i class="fas fa-toggle-on"></i> حالة السائق:</label>
+<select id="driverStatus" onchange="updateDriverStatus()">
+<option value="available">متاح</option>
+<option value="busy">مشغول</option>
+<option value="offline">غير متصل</option>
+</select>
+
+<label><i class="fas fa-users"></i> عدد المقاعد المتاحة:</label>
+<input type="number" id="availableSeats" min="1" max="8" value="4">
+
+<label><i class="fas fa-sticky-note"></i> ملاحظات السائق:</label>
+<textarea id="driverNotes" placeholder="معلومات إضافية للركاب..." style="height: 60px;"></textarea>
+
+<!-- حاسبة المسافة والثمن -->
+<div class="distance-calculator">
+<h4><i class="fas fa-calculator"></i> حاسبة الثمن:</h4>
+<div class="distance-input">
+<input type="number" id="distanceInput" placeholder="المسافة (كم)" min="1" onchange="calculatePrice()">
+</div>
+<div id="priceDisplay" class="price-display" style="display: none;">
+<i class="fas fa-money-bill-wave"></i> الثمن: <span id="calculatedPrice">0</span> دينار
+</div>
+</div>
+</div>
+
+<button onclick="activateRide()" id="activateBtn" class="pulse">
+<i class="fas fa-play"></i> تفعيل الرحلة
+</button>
+<button onclick="logout()" style="background: linear-gradient(135deg, #e53e3e, #c53030); margin-top: 10px;">
+<i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+</button>
+</div>
+</div>
+
+<!-- نافذة الدردشة المحسنة -->
+<div id="chatContainer" class="chat-container">
+<div class="chat-header">
+<span id="chatTitle"><i class="fas fa-comments"></i> الدردشة</span>
+<button onclick="closeChat()" style="background: none; border: none; color: white; cursor: pointer; padding: 5px; margin: 0; width: auto; border-radius: 50%; transition: all 0.3s ease;">
+<i class="fas fa-times"></i>
+</button>
+</div>
+<div id="chatMessages" class="chat-messages"></div>
+<div class="chat-input-container">
+<input type="text" id="chatInput" class="chat-input" placeholder="اكتب رسالتك..." onkeypress="handleChatKeyPress(event)">
+<button onclick="sendMessage()" class="send-btn">
+<i class="fas fa-paper-plane"></i>
+</button>
+</div>
+</div>
+
+<!-- Rating modal -->
+<div id="ratingModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; backdrop-filter: blur(5px);">
+<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px;">
+<div class="rating-container">
+<h3 style="text-align: center; color: #2d3748; margin-bottom: 20px;">
+<i class="fas fa-star" style="color: #ffd700;"></i> قيم السائق
+</h3>
+<div class="star-rating" id="starRating">
+<span class="star" data-rating="1">★</span>
+<span class="star" data-rating="2">★</span>
+<span class="star" data-rating="3">★</span>
+<span class="star" data-rating="4">★</span>
+<span class="star" data-rating="5">★</span>
+</div>
+<textarea class="rating-comment" id="ratingComment" placeholder="اكتب تعليقك على السائق (اختياري)..."></textarea>
+<div style="display: flex; gap: 10px; margin-top: 20px;">
+<button onclick="submitRating()" style="flex: 1; background: linear-gradient(135deg, #38a169, #2f855a);">
+<i class="fas fa-check"></i> إرسال التقييم
+</button>
+<button onclick="closeRatingModal()" style="flex: 1; background: linear-gradient(135deg, #718096, #4a5568);">
+<i class="fas fa-times"></i> تخطي
+</button>
+</div>
+</div>
+</div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- تحميل مكتبات Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, get, child, onValue, push, remove, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyAekz29R9IwY1pygd4Mic5AX8XZ7A7Z4Fs",
+authDomain: "grasias-d7830.firebaseapp.com",
+databaseURL: "https://grasias-d7830-default-rtdb.asia-southeast1.firebasedatabase.app",
+projectId: "grasias-d7830",
+storageBucket: "grasias-d7830.appspot.com",
+messagingSenderId: "134413476604",
+appId: "1:134413476604:web:ab1acfa69c025218cbad79",
+measurementId: "G-6QBYM41CJ1"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+// جعل المتغيرات والدوال متاحة عالمياً
+window.currentUser = null;
+window.currentRole = null;
+window.currentTrip = null;
+window.currentChatPartner = null;
+window.selectedDriver = null;
+window.currentLocation = null;
+window.currentMap = null;
+window.selectedRating = 0;
+window.db = db;
+window.auth = auth;
+window.ref = ref;
+window.set = set;
+window.get = get;
+window.update = update;
+window.push = push;
+window.onValue = onValue;
+
+window.signInWithGoogle = () => {
+const roleInput = document.querySelector('input[name="role"]:checked');
+if (!roleInput) {
+showMessage('يرجى اختيار نوع المستخدم أولاً', 'error');
+return;
+}
+
+const selectedRole = roleInput.value;
+const loginBtn = document.querySelector('button');
+loginBtn.innerHTML = '<span class="loading"></span> جاري تسجيل الدخول...';
+loginBtn.disabled = true;
+
+signInWithPopup(auth, provider)
+.then((result) => {
+window.currentUser = result.user;
+window.currentRole = selectedRole;
+
+const userData = {
+uid: result.user.uid,
+name: result.user.displayName,
+email: result.user.email,
+role: selectedRole,
+lastLogin: Date.now(),
+status: selectedRole === 'sayeq' ? 'offline' : 'active'
+};
+
+return set(ref(db, `users/${result.user.uid}`), userData);
+})
+.then(() => {
+showMessage('تم تسجيل الدخول بنجاح!', 'success');
+setTimeout(() => {
+document.getElementById('loginPage').style.display = 'none';
+document.getElementById('mapPage').style.display = 'block';
+loadMap(window.currentUser.displayName);
+watchTripRequests();
+}, 1500);
+})
+.catch((error) => {
+console.error('خطأ في تسجيل الدخول:', error);
+showMessage('حدث خطأ في تسجيل الدخول', 'error');
+loginBtn.innerHTML = '<i class="fab fa-google"></i> تسجيل الدخول بجوجل';
+loginBtn.disabled = false;
+});
+};
+
+function showMessage(message, type) {
+const successEl = document.getElementById('successMessage');
+const errorEl = document.getElementById('errorMessage');
+
+successEl.style.display = 'none';
+errorEl.style.display = 'none';
+
+if (type === 'success') {
+successEl.textContent = message;
+successEl.style.display = 'block';
+} else {
+errorEl.textContent = message;
+errorEl.style.display = 'block';
+}
+
+setTimeout(() => {
+successEl.style.display = 'none';
+errorEl.style.display = 'none';
+}, 5000);
+}
+
+function calculatePrice() {
+const distance = parseFloat(document.getElementById('distanceInput').value);
+if (!distance || distance <= 0) {
+document.getElementById('priceDisplay').style.display = 'none';
+return;
+}
+
+let totalPrice = 0;
+
+if (distance <= 20) {
+totalPrice = distance * 10;
+} else if (distance <= 50) {
+totalPrice = (20 * 10) + ((distance - 20) * 5);
+} else {
+totalPrice = (20 * 10) + (30 * 5) + ((distance - 50) * 2);
+}
+
+document.getElementById('calculatedPrice').textContent = totalPrice;
+document.getElementById('priceDisplay').style.display = 'block';
+}
+
+function calculateAutoDistance(lat1, lng1, lat2, lng2) {
+const R = 6371;
+const dLat = (lat2 - lat1) * Math.PI / 180;
+const dLng = (lng2 - lng1) * Math.PI / 180;
+const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+Math.sin(dLng/2) * Math.sin(dLng/2);
+const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+const distance = R * c;
+
+// Update auto distance display
+document.getElementById('autoDistanceValue').textContent = distance.toFixed(1) + ' كم';
+document.getElementById('autoDistance').style.display = 'block';
+
+// Calculate auto price
+let autoPrice = 0;
+if (distance <= 20) {
+autoPrice = distance * 10;
+} else if (distance <= 50) {
+autoPrice = (20 * 10) + ((distance - 20) * 5);
+} else {
+autoPrice = (20 * 10) + (30 * 5) + ((distance - 50) * 2);
+}
+
+document.getElementById('autoPrice').textContent = `الثمن: ${Math.round(autoPrice)} دينار`;
+return distance;
+}
+
+function loadMap(userName) {
+if (window.currentMap) {
+window.currentMap.remove();
+}
+
+window.currentMap = L.map('map').setView([28.0339, 1.6596], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+attribution: '© OpenStreetMap contributors'
+}).addTo(window.currentMap);
+
+// تخصيص المحتوى حسب نوع المستخدم
+if (window.currentRole === 'rakib') {
+document.getElementById('passengerContent').style.display = 'block';
+document.getElementById('driverContent').style.display = 'none';
+document.getElementById('sidebarTitle').innerHTML = '<i class="fas fa-search"></i> البحث عن سائق';
+document.getElementById('activateBtn').innerHTML = '<i class="fas fa-search"></i> البحث عن سائق';
+} else {
+document.getElementById('passengerContent').style.display = 'none';
+document.getElementById('driverContent').style.display = 'block';
+document.getElementById('sidebarTitle').innerHTML = '<i class="fas fa-tachometer-alt"></i> لوحة السائق';
+document.getElementById('activateBtn').innerHTML = '<i class="fas fa-play"></i> تفعيل الخدمة';
+}
+
+if (navigator.geolocation) {
+navigator.geolocation.getCurrentPosition(position => {
+const lat = position.coords.latitude;
+const lng = position.coords.longitude;
+window.currentLocation = { lat, lng };
+
+window.currentMap.setView([lat, lng], 13);
+
+// إضافة علامة الموقع الحالي
+const currentLocationIcon = L.divIcon({
+className: 'current-location-marker',
+html: '<div style="background: #667eea; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);"></div>',
+iconSize: [20, 20],
+iconAnchor: [10, 10]
+});
+
+L.marker([lat, lng], { icon: currentLocationIcon })
+.addTo(window.currentMap)
+.bindPopup('موقعك الحالي')
+.openPopup();
+
+// حفظ الموقع في قاعدة البيانات
+if (window.currentUser) {
+update(ref(db, `users/${window.currentUser.uid}`), {
+location: { lat, lng },
+lastLocationUpdate: Date.now()
+});
+}
+
+// تحميل السائقين القريبين للراكب
+if (window.currentRole === 'rakib') {
+loadNearbyDrivers();
+}
+}, error => {
+console.error('خطأ في الحصول على الموقع:', error);
+showNotification('تعذر الحصول على الموقع', 'يرجى السماح بالوصول للموقع', 'error');
+});
+} else {
+showNotification('الموقع غير مدعوم', 'متصفحك لا يدعم خدمات الموقع', 'error');
+}
+}
+
+function loadNearbyDrivers() {
+const driversRef = ref(db, 'users');
+onValue(driversRef, (snapshot) => {
+const users = snapshot.val();
+const driversList = document.getElementById('driversList');
+driversList.innerHTML = '';
+
+if (!users || !window.currentLocation) return;
+
+const availableDrivers = [];
+
+Object.keys(users).forEach(userId => {
+const user = users[userId];
+if (user.role === 'sayeq' && user.status === 'available' && user.location && userId !== window.currentUser.uid) {
+const distance = calculateAutoDistance(
+window.currentLocation.lat,
+window.currentLocation.lng,
+user.location.lat,
+user.location.lng
+);
+
+if (distance <= 50) {
+availableDrivers.push({
+...user,
+userId,
+distance: distance.toFixed(1)
+});
+}
+}
+});
+
+availableDrivers.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+
+availableDrivers.forEach(driver => {
+const driverCard = document.createElement('div');
+driverCard.className = 'driver-card';
+driverCard.innerHTML = `
+<div class="driver-info">
+<div class="driver-name">
+<i class="fas fa-user-tie"></i> ${driver.name}
+</div>
+<div class="driver-distance">
+<i class="fas fa-route"></i> ${driver.distance} كم
+</div>
+</div>
+<div style="margin-bottom: 10px; color: #718096; font-size: 14px;">
+<i class="fas fa-users"></i> المقاعد: ${driver.availableSeats || 4} |
+<i class="fas fa-star" style="color: #ffd700;"></i> ${driver.rating || 'جديد'}
+</div>
+<div class="driver-actions">
+<button onclick="selectDriver('${driver.userId}')" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+<i class="fas fa-hand-point-up"></i> اختيار
+</button>
+<button onclick="startChat('${driver.userId}', '${driver.name}')" style="background: linear-gradient(135deg, #38a169, #2f855a);">
+<i class="fas fa-comments"></i> دردشة
+</button>
+<button onclick="callDriver('${driver.phone || 'غير متوفر'}')" style="background: linear-gradient(135deg, #3182ce, #2c5282);">
+<i class="fas fa-phone"></i> اتصال
+</button>
+</div>
+`;
+driversList.appendChild(driverCard);
+
+// إضافة علامة السائق على الخريطة
+const driverIcon = L.divIcon({
+className: 'driver-marker',
+html: '<div style="background: #38a169; width: 15px; height: 15px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
+iconSize: [15, 15],
+iconAnchor: [7.5, 7.5]
+});
+
+L.marker([driver.location.lat, driver.location.lng], { icon: driverIcon })
+.addTo(window.currentMap)
+.bindPopup(`${driver.name} - ${driver.distance} كم`);
+});
+
+if (availableDrivers.length === 0) {
+driversList.innerHTML = '<div style="text-align: center; color: #718096; padding: 20px;"><i class="fas fa-search"></i><br>لا يوجد سائقون متاحون في المنطقة</div>';
+}
+});
+}
+
+function startChat(userId, userName) {
+window.currentChatPartner = { userId, userName };
+document.getElementById('chatTitle').innerHTML = `<i class="fas fa-comments"></i> دردشة مع ${userName}`;
+document.getElementById('chatContainer').style.display = 'flex';
+loadChatMessages(userId);
+}
+
+function closeChat() {
+document.getElementById('chatContainer').style.display = 'none';
+window.currentChatPartner = null;
+}
+
+function loadChatMessages(partnerId) {
+const chatId = [window.currentUser.uid, partnerId].sort().join('_');
+const messagesRef = ref(db, `chats/${chatId}/messages`);
+
+onValue(messagesRef, (snapshot) => {
+const messages = snapshot.val();
+const chatMessages = document.getElementById('chatMessages');
+chatMessages.innerHTML = '';
+
+if (messages) {
+Object.keys(messages).forEach(messageId => {
+const message = messages[messageId];
+const messageDiv = document.createElement('div');
+messageDiv.className = `message ${message.senderId === window.currentUser.uid ? 'sent' : 'received'}`;
+messageDiv.innerHTML = `
+<div>${message.text}</div>
+<div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">
+${new Date(message.timestamp).toLocaleTimeString('ar-SA')}
+</div>
+`;
+chatMessages.appendChild(messageDiv);
+});
+chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+});
+}
+
+function sendMessage() {
+const chatInput = document.getElementById('chatInput');
+const messageText = chatInput.value.trim();
+
+if (!messageText || !window.currentChatPartner) return;
+
+const chatId = [window.currentUser.uid, window.currentChatPartner.userId].sort().join('_');
+const messagesRef = ref(db, `chats/${chatId}/messages`);
+
+push(messagesRef, {
+text: messageText,
+senderId: window.currentUser.uid,
+senderName: window.currentUser.displayName,
+timestamp: Date.now()
+});
+
+chatInput.value = '';
+}
+
+function handleChatKeyPress(event) {
+if (event.key === 'Enter') {
+sendMessage();
+}
+}
+
+function selectDriver(driverId) {
+window.selectedDriver = driverId;
+
+const tripRequest = {
+passengerId: window.currentUser.uid,
+passengerName: window.currentUser.displayName,
+driverId: driverId,
+passengerLocation: window.currentLocation,
+status: 'pending',
+timestamp: Date.now()
+};
+
+push(ref(db, 'tripRequests'), tripRequest)
+.then(() => {
+showNotification('تم إرسال طلب الرحلة', 'في انتظار موافقة السائق...', 'info');
+});
+}
+
+function watchTripRequests() {
+const requestsRef = ref(db, 'tripRequests');
+onValue(requestsRef, (snapshot) => {
+const requests = snapshot.val();
+if (!requests) return;
+
+Object.keys(requests).forEach(requestId => {
+const request = requests[requestId];
+
+// للسائق: عرض طلبات الرحلات الواردة
+if (window.currentRole === 'sayeq' && request.driverId === window.currentUser.uid && request.status === 'pending') {
+showTripRequestNotification(request, requestId);
+}
+
+// للراكب: عرض حالة الطلب
+if (window.currentRole === 'rakib' && request.passengerId === window.currentUser.uid) {
+updateTripStatus(request, requestId);
+}
+});
+});
+}
+
+function showTripRequestNotification(request, requestId) {
+// Remove existing notifications
+const existingNotifications = document.querySelectorAll('.notification');
+existingNotifications.forEach(notification => {
+if (notification.parentNode) {
+notification.parentNode.removeChild(notification);
+}
+});
+
+const distance = calculateAutoDistance(
+window.currentLocation.lat,
+window.currentLocation.lng,
+request.passengerLocation.lat,
+request.passengerLocation.lng
+);
+
+const notification = document.createElement('div');
+notification.className = 'notification';
+notification.innerHTML = `
+<div class="notification-title">
+<i class="fas fa-car"></i> طلب رحلة جديد
+</div>
+<div class="notification-content">
+<strong>الراكب:</strong> ${request.passengerName}<br>
+<strong>المسافة:</strong> ${distance.toFixed(1)} كم<br>
+<strong>الثمن المتوقع:</strong> ${calculateTripPrice(distance)} دينار
+</div>
+<div class="notification-actions">
+<button class="accept-btn" onclick="acceptTrip('${requestId}')">
+<i class="fas fa-check"></i> قبول
+</button>
+<button class="reject-btn" onclick="rejectTrip('${requestId}')">
+<i class="fas fa-times"></i> رفض
+</button>
+</div>
+`;
+document.body.appendChild(notification);
+
+setTimeout(() => {
+if (notification.parentNode) {
+notification.parentNode.removeChild(notification);
+}
+}, 30000);
+}
+
+function calculateTripPrice(distance) {
+let price = 0;
+if (distance <= 20) {
+price = distance * 10;
+} else if (distance <= 50) {
+price = (20 * 10) + ((distance - 20) * 5);
+} else {
+price = (20 * 10) + (30 * 5) + ((distance - 50) * 2);
+}
+return Math.round(price);
+}
+
+function acceptTrip(requestId) {
+update(ref(db, `tripRequests/${requestId}`), {
+status: 'accepted',
+acceptedAt: Date.now()
+});
+
+// Remove notification
+const notifications = document.querySelectorAll('.notification');
+notifications.forEach(notification => {
+if (notification.parentNode) {
+notification.parentNode.removeChild(notification);
+}
+});
+
+showNotification('تم قبول الرحلة', 'يمكنك الآن التواصل مع الراكب', 'success');
+}
+
+function rejectTrip(requestId) {
+update(ref(db, `tripRequests/${requestId}`), {
+status: 'rejected',
+rejectedAt: Date.now()
+});
+
+const notifications = document.querySelectorAll('.notification');
+notifications.forEach(notification => {
+if (notification.parentNode) {
+notification.parentNode.removeChild(notification);
+}
+});
+
+showNotification('تم رفض الرحلة', '', 'info');
+}
+
+function updateTripStatus(request, requestId) {
+window.currentTrip = { ...request, id: requestId };
+const statusDiv = document.getElementById('tripStatus');
+const statusText = document.getElementById('tripStatusText');
+const controlsDiv = document.getElementById('tripControls');
+
+statusDiv.style.display = 'block';
+controlsDiv.style.display = 'flex';
+
+switch (request.status) {
+case 'pending':
+statusText.innerHTML = `
+<i class="fas fa-clock"></i> في انتظار موافقة السائق...<br>
+<small>تم إرسال الطلب منذ ${Math.round((Date.now() - request.timestamp) / 60000)} دقيقة</small>
+`;
+break;
+case 'accepted':
+statusText.innerHTML = `
+<i class="fas fa-check-circle" style="color: #38a169;"></i> تم قبول الرحلة!<br>
+<small>السائق في الطريق إليك</small>
+`;
+if (window.currentRole === 'sayeq') {
+document.getElementById('pickupBtn').style.display = 'block';
+}
+break;
+case 'picked_up':
+statusText.innerHTML = `
+<i class="fas fa-car" style="color: #3182ce;"></i> الرحلة جارية...<br>
+<small>تم تركيب الراكب</small>
+`;
+if (window.currentRole === 'rakib') {
+document.getElementById('completeBtn').style.display = 'block';
+}
+break;
+case 'completed':
+statusText.innerHTML = `
+<i class="fas fa-flag-checkered" style="color: #38a169;"></i> تمت الرحلة بنجاح!<br>
+<small>شكراً لاستخدام GRASIAS</small>
+`;
+controlsDiv.style.display = 'none';
+if (window.currentRole === 'rakib') {
+setTimeout(() => showRatingModal(), 2000);
+}
+break;
+case 'cancelled':
+statusText.innerHTML = `
+<i class="fas fa-times-circle" style="color: #e53e3e;"></i> تم إلغاء الرحلة<br>
+<small>يمكنك البحث عن رحلة أخرى</small>
+`;
+controlsDiv.style.display = 'none';
+break;
+}
+}
+
+function cancelTrip() {
+if (!window.currentTrip) return;
+
+if (confirm('هل أنت متأكد من إلغاء الرحلة؟')) {
+update(ref(db, `tripRequests/${window.currentTrip.id}`), {
+status: 'cancelled',
+cancelledAt: Date.now(),
+cancelledBy: window.currentUser.uid
+});
+
+showNotification('تم إلغاء الرحلة', '', 'info');
+}
+}
+
+function confirmPickup() {
+if (!window.currentTrip) return;
+
+update(ref(db, `tripRequests/${window.currentTrip.id}`), {
+status: 'picked_up',
+pickedUpAt: Date.now()
+});
+
+document.getElementById('pickupBtn').style.display = 'none';
+showNotification('تم تأكيد تركيب الراكب', 'الرحلة جارية الآن', 'success');
+}
+
+function completeTrip() {
+if (!window.currentTrip) return;
+
+update(ref(db, `tripRequests/${window.currentTrip.id}`), {
+status: 'completed',
+completedAt: Date.now()
+});
+
+document.getElementById('completeBtn').style.display = 'none';
+showNotification('تمت الرحلة بنجاح!', 'شكراً لاستخدام GRASIAS', 'success');
+}
+
+function showRatingModal() {
+document.getElementById('ratingModal').style.display = 'block';
+setupStarRating();
+}
+
+function closeRatingModal() {
+document.getElementById('ratingModal').style.display = 'none';
+window.selectedRating = 0;
+document.getElementById('ratingComment').value = '';
+}
+
+function setupStarRating() {
+const stars = document.querySelectorAll('.star');
+stars.forEach((star, index) => {
+star.addEventListener('click', () => {
+window.selectedRating = index + 1;
+updateStarDisplay();
+});
+
+star.addEventListener('mouseover', () => {
+highlightStars(index + 1);
+});
+});
+
+document.getElementById('starRating').addEventListener('mouseleave', () => {
+updateStarDisplay();
+});
+}
+
+function highlightStars(rating) {
+const stars = document.querySelectorAll('.star');
+stars.forEach((star, index) => {
+if (index < rating) {
+star.classList.add('active');
+} else {
+star.classList.remove('active');
+}
+});
+}
+
+function updateStarDisplay() {
+highlightStars(window.selectedRating);
+}
+
+function submitRating() {
+if (window.selectedRating === 0) {
+alert('يرجى اختيار تقييم أولاً');
+return;
+}
+
+const comment = document.getElementById('ratingComment').value.trim();
+const driverId = window.currentTrip.driverId;
+
+// Save rating
+const ratingData = {
+rating: window.selectedRating,
+comment: comment,
+passengerId: window.currentUser.uid,
+passengerName: window.currentUser.displayName,
+tripId: window.currentTrip.id,
+timestamp: Date.now()
+};
+
+push(ref(db, `ratings/${driverId}`), ratingData);
+
+// Update driver's average rating
+get(ref(db, `ratings/${driverId}`)).then((snapshot) => {
+const ratings = snapshot.val();
+if (ratings) {
+const ratingValues = Object.values(ratings).map(r => r.rating);
+const averageRating = (ratingValues.reduce((a, b) => a + b, 0) / ratingValues.length).toFixed(1);
+
+update(ref(db, `users/${driverId}`), {
+rating: averageRating,
+totalRatings: ratingValues.length
+});
+}
+});
+
+closeRatingModal();
+showNotification('شكراً لتقييمك!', 'تم إرسال التقييم بنجاح', 'success');
+}
+
+function showNotification(title, message, type) {
+const notification = document.createElement('div');
+notification.className = 'notification';
+
+let icon = '';
+let bgColor = '';
+switch (type) {
+case 'success':
+icon = '<i class="fas fa-check-circle" style="color: #38a169;"></i>';
+bgColor = 'rgba(56, 161, 105, 0.1)';
+break;
+case 'error':
+icon = '<i class="fas fa-exclamation-circle" style="color: #e53e3e;"></i>';
+bgColor = 'rgba(229, 62, 62, 0.1)';
+break;
+case 'info':
+icon = '<i class="fas fa-info-circle" style="color: #3182ce;"></i>';
+bgColor = 'rgba(49, 130, 206, 0.1)';
+break;
+}
+
+notification.style.background = bgColor;
+notification.innerHTML = `
+<div class="notification-title">${icon} ${title}</div>
+${message ? `<div class="notification-content">${message}</div>` : ''}
+`;
+
+document.body.appendChild(notification);
+
+setTimeout(() => {
+if (notification.parentNode) {
+notification.parentNode.removeChild(notification);
+}
+}, 5000);
+}
+
+function updateDriverStatus() {
+const status = document.getElementById('driverStatus').value;
+update(ref(db, `users/${window.currentUser.uid}`), {
+status: status,
+lastStatusUpdate: Date.now()
+});
+
+showNotification('تم تحديث الحالة', `الحالة الآن: ${status === 'available' ? 'متاح' : status === 'busy' ? 'مشغول' : 'غير متصل'}`, 'success');
+}
+
+function activateRide() {
+if (window.currentRole === 'rakib') {
+loadNearbyDrivers();
+showNotification('جاري البحث', 'البحث عن السائقين القريبين...', 'info');
+} else {
+const status = document.getElementById('driverStatus').value;
+if (status === 'offline') {
+document.getElementById('driverStatus').value = 'available';
+updateDriverStatus();
+}
+showNotification('تم تفعيل الخدمة', 'أنت الآن متاح لاستقبال طلبات الرحلات', 'success');
+}
+}
+
+function callDriver(phone) {
+if (phone && phone !== 'غير متوفر') {
+window.open(`tel:${phone}`, '_self');
+} else {
+showNotification('رقم غير متوفر', 'رقم الهاتف غير متوفر للسائق', 'error');
+}
+}
+
+function logout() {
+if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+// Update user status to offline
+if (window.currentUser) {
+update(ref(db, `users/${window.currentUser.uid}`), {
+status: 'offline',
+lastLogout: Date.now()
+});
+}
+
+window.currentUser = null;
+window.currentRole = null;
+window.currentTrip = null;
+document.getElementById('mapPage').style.display = 'none';
+document.getElementById('loginPage').style.display = 'block';
+showMessage('تم تسجيل الخروج بنجاح', 'success');
+}
+}
+
+</script>
+
+</body>
+</html>
